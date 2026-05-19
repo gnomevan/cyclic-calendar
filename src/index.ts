@@ -55,3 +55,10 @@ export {
 // Initial wheels
 export { solarWheel, SOLAR_ANCHORS } from "./wheels/solar.js";
 export { lunarWheel, LUNAR_ANCHORS } from "./wheels/lunar.js";
+export {
+  pleiadesWheel,
+  PLEIADES_ANCHORS,
+  PLEIADES_ECLIPTIC_LON_J2000,
+  heliacalRisingAngle,
+  heliacalSettingAngle,
+} from "./wheels/pleiades.js";

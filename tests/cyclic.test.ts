@@ -4,6 +4,8 @@ import {
   resolve,
   solarWheel,
   lunarWheel,
+  pleiadesWheel,
+  heliacalRisingAngle,
   fromISOString,
   toISOString,
   toGregorianUTC,
@@ -13,7 +15,7 @@ import {
   type ResolveContext,
 } from "../src/index.js";
 
-const registry = new SimpleWheelRegistry([solarWheel, lunarWheel]);
+const registry = new SimpleWheelRegistry([solarWheel, lunarWheel, pleiadesWheel]);
 
 // A fixed reference point so tests are deterministic across runs.
 const REF = fromISOString("2026-01-01T00:00:00Z");
@@ -211,6 +213,105 @@ describe("pinning rules", () => {
       target: { wheelId: "lunar", anchorId: "full_moon" },
       start: { wheelId: "solar", anchorId: "samhain" },
       end: { wheelId: "solar", anchorId: "beltane" },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+  });
+});
+
+describe("Pleiades wheel", () => {
+  const HOME_LAT = 38; // project owner's reported area (38°N)
+
+  it("reports a position now in [0, 360)", () => {
+    const angle = pleiadesWheel.positionAt(REF);
+    expect(angle).toBeGreaterThanOrEqual(0);
+    expect(angle).toBeLessThan(360);
+  });
+
+  it("position is consistent with Sun-Pleiades geometry", () => {
+    // At REF (Jan 1, 2026), the Sun is in Capricorn (~280° ecliptic) and
+    // the Pleiades are around 60° ecliptic, so the separation should be
+    // somewhere in the 200s.
+    const angle = pleiadesWheel.positionAt(REF);
+    expect(angle).toBeGreaterThan(180);
+    expect(angle).toBeLessThan(280);
+  });
+
+  it("finds the next heliacal rising at 38°N", () => {
+    const angle = heliacalRisingAngle(HOME_LAT);
+    const observer = { latitude: HOME_LAT, longitude: -78 };
+    const at = pleiadesWheel.nextCrossing(angle, REF, observer);
+    expect(at).not.toBeNull();
+    // Pleiades-Sun conjunction in 2026 is around May 21 (Sun reaches
+    // ecliptic longitude ~60°); heliacal rising follows ~12-15 days later
+    // at mid-latitudes. Allow May through July as a comfortable window.
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2026);
+    expect(g.month).toBeGreaterThanOrEqual(5);
+    expect(g.month).toBeLessThanOrEqual(7);
+  });
+
+  it("finds the next acronychal rising (opposition, Pleiades visible all night)", () => {
+    const at = pleiadesWheel.nextCrossing(180, REF);
+    expect(at).not.toBeNull();
+    // Pleiades opposition occurs when the Sun is at ecliptic longitude 240°
+    // (~November). 2026: around November 17-18.
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2026);
+    expect(g.month).toBe(11);
+  });
+
+  it("resolver: exact rule against a Pleiades anchor (no resolver changes)", () => {
+    const rule: PinningRule = {
+      kind: "exact",
+      anchor: { wheelId: "pleiades", anchorId: "acronychal_rising" },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    expect(g.month).toBe(11);
+  });
+
+  it("resolver: firstAfter — first new moon after Pleiades acronychal rising", () => {
+    const rule: PinningRule = {
+      kind: "firstAfter",
+      target: { wheelId: "lunar", anchorId: "new_moon" },
+      after: {
+        kind: "anchor",
+        ref: { wheelId: "pleiades", anchorId: "acronychal_rising" },
+      },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    // Acronychal rising is mid-November; next new moon is within ~30 days.
+    const g = toGregorianUTC(result!.at);
+    expect(g.year === 2026 || g.year === 2027).toBe(true);
+    expect(g.month === 11 || g.month === 12).toBe(true);
+  });
+
+  it("resolver: nearest — full moon nearest Pleiades acronychal rising", () => {
+    const rule: PinningRule = {
+      kind: "nearest",
+      target: { wheelId: "lunar", anchorId: "full_moon" },
+      near: {
+        kind: "anchor",
+        ref: { wheelId: "pleiades", anchorId: "acronychal_rising" },
+      },
+      toleranceDays: 30,
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    expect(g.year).toBe(2026);
+    expect(g.month === 10 || g.month === 11 || g.month === 12).toBe(true);
+  });
+
+  it("resolver: conjunction — Pleiades acronychal rising with full moon (wide tolerance)", () => {
+    const rule: PinningRule = {
+      kind: "conjunction",
+      primary: { wheelId: "pleiades", anchorId: "acronychal_rising" },
+      others: [{ wheelId: "lunar", anchorId: "full_moon" }],
+      toleranceDays: 15, // half a lunation guarantees a hit each year
     };
     const result = resolve(rule, ctx());
     expect(result).not.toBeNull();

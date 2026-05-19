@@ -260,3 +260,83 @@ no multi-user accommodation in the schema (expensive to retrofit).
 **Would force a revisit**: nothing in v1. When multi-user actually
 arrives, an authentication and authorization layer is added; the schema
 is already shaped for it.
+
+---
+
+## ADR-010: Observer-dependence in stellar wheels lives outside the core interface
+
+**Decided**: For the Pleiades wheel (and stellar wheels generally), the
+wheel's `positionAt` and `nextCrossing` are observer-independent. The
+wheel measures a single well-defined astronomical quantity — for Pleiades,
+the ecliptic separation between Sun and cluster — and its universal
+anchors are the latitude-independent positions on that cycle
+(conjunction, acronychal rising). Latitude-dependent events (heliacal
+rising and setting) are exposed as **helper functions** that return a
+target angle, which callers feed into `nextCrossing` directly.
+
+**Alternatives considered**:
+
+1. Make `Anchor.angle` a function of observer (universal anchors that
+   compute their angle from a `Location`). This would push observer
+   awareness into the anchor type itself.
+2. Move all heliacal logic into the wheel: `positionAt(at, observer)`
+   returns a latitude-corrected angle such that fixed anchor positions
+   (`heliacal_rising` at 11°, etc.) correspond to real events at any
+   observer. Latitude correction lives inside the wheel.
+3. Give the wheel a richer constructor: `pleiadesWheelFor(observer)`
+   returns a `Wheel` with latitude-baked anchors.
+
+**Reasoning**:
+
+- The Wheel interface is the load-bearing decision in this codebase.
+  Pleiades is the first stellar wheel and the first test of whether the
+  interface holds for observer-dependent cycles. The honest answer is
+  that the interface holds **as written** — no amendment needed — provided
+  we are careful about which observer-dependence is the wheel's
+  responsibility and which isn't.
+- The Sun-Pleiades ecliptic geometry is the same for every observer.
+  Putting observer into `positionAt` would be a lie: the angle does not
+  actually depend on where you are standing. The cultural significance
+  of certain angles (when the cluster is *visible*) does — but visibility
+  is a separate concern from position on the wheel.
+- Alternative 1 (per-observer anchors) breaks a useful invariant:
+  anchors are simple, addressable, identifier-keyed positions. Making
+  their angle a function destabilizes the abstraction and complicates
+  the resolver, which currently looks up anchors by id and reads
+  `.angle` directly.
+- Alternative 2 (latitude correction inside `positionAt`) requires a
+  piecewise mapping because heliacal rising and acronychal rising depend
+  on latitude in completely different ways (heliacal events shift,
+  acronychal events don't). Building this into the position function
+  would invent a new coordinate system whose semantics are not
+  immediately obvious, harming readability and forcing the same trick
+  into every future stellar wheel.
+- Alternative 3 (per-observer wheel instances) defeats the registry
+  model — wheels are supposed to be singletons looked up by id.
+- Helpers that return a target angle keep the simple structure intact.
+  A user writing a personal anchor for "my heliacal rising of the
+  Pleiades" computes the angle once (`heliacalRisingAngle(38)`), stores
+  it in their personal anchor record, and references it by id like any
+  other anchor.
+
+**What this means in practice**:
+
+- Universal anchors on a wheel are latitude-independent astronomical
+  positions only.
+- Latitude-dependent events become personal anchors, computed by
+  per-wheel helper functions, and stored against the user (multi-user
+  scaffolding from ADR-009 already supports this).
+- The `requiresObserver` flag on a wheel signals whether the **core
+  methods** (`positionAt`, `nextCrossing`) need an observer to compute,
+  not whether any of the wheel's culturally meaningful events do. For
+  Pleiades, the core methods are pure geometry — `requiresObserver:
+  false`. A wheel like "sunrise time at my location" would be `true`.
+
+**Would force a revisit**: a wheel whose core *position quantity*
+genuinely depends on the observer in a way that cannot be factored out
+— for example, a horizon-altitude wheel for a specific star, where the
+angle itself only exists relative to a location. At that point
+`positionAt` legitimately needs an observer and `requiresObserver: true`
+becomes meaningful at the method level too. The interface already
+accepts this — `positionAt(at, observer?)` makes the parameter
+available. No code change required, just a wheel that uses it.
