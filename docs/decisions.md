@@ -340,3 +340,114 @@ angle itself only exists relative to a location. At that point
 becomes meaningful at the method level too. The interface already
 accepts this — `positionAt(at, observer?)` makes the parameter
 available. No code change required, just a wheel that uses it.
+
+---
+
+## ADR-011: Local-first persistence, sync-ready schema, sync engine deferred
+
+**Decided**: v1 persistence is SQLite, single-device, offline-only. The
+schema and the `Repository` interface are designed so that a future
+sync layer drops in without migration — UUID primary keys, soft deletes
+via tombstones, an `updated_at` clock and a `node_id` on every
+user-scoped row. The sync engine itself is **not** built in v1.
+
+**Alternatives considered**:
+
+1. Pure local — single-device only, no sync forethought. Smallest
+   schema, smallest now-cost, biggest later-cost.
+2. Build sync in v1 — CouchDB/PouchDB, Electric SQL, PowerSync,
+   Replicache, or a hand-rolled engine. Delivers multi-device on day
+   one but front-loads infrastructure decisions before the model has
+   been used in anger.
+3. Server-authoritative with local cache — Google Calendar pattern.
+   Conflicts with the stated offline-first requirement.
+
+**Reasoning**:
+
+- The user wants offline use **and** eventual multi-device sync (the
+  "log in and see your stuff anywhere" model). These two requirements
+  together name a local-first architecture as the only honest fit —
+  server-authoritative caches degrade offline; pure local can't sync.
+- Because of ADR-007 (events are patterns, occurrences resolved on
+  demand), the *actual persisted data* is tiny: events, past
+  occurrences with notes, personal anchors, origins, travel timeline,
+  preferences. No dense per-day storage. Sync engines that would be
+  overkill for a "real" calendar are tractable here.
+- The cost of "sync-ready schema, no sync engine yet" is ~5 extra
+  columns per user-scoped table and a discipline rule. The cost of
+  retrofitting sync onto a schema that wasn't built for it is invasive
+  surgery — `INTEGER AUTOINCREMENT` keys collide across devices, hard
+  deletes can't propagate, and there is no way to order concurrent
+  writes after the fact.
+- Building the sync engine itself in v1 would mean choosing an
+  ecosystem (CouchDB? Electric? Postgres + custom?) before we know what
+  the UI needs or how often users actually edit from a second device.
+  That decision is cheap to defer and expensive to undo.
+
+**The five sync-readiness rules** (enforced at the schema layer):
+
+1. **UUIDs for all primary keys.** Two offline devices can create
+   events without coordinating. No autoincrement integers anywhere
+   user-scoped. (Astronomy data — wheels, universal anchors — is code,
+   not stored, so it does not need UUIDs.)
+2. **Tombstones, not hard deletes.** Every user-scoped table carries
+   `deleted_at INTEGER` (NULL = live). Deletion sets the column;
+   queries filter on `deleted_at IS NULL`. Sync requires this — a row
+   that just disappears from one device cannot be told apart from a
+   row the device never had.
+3. **`updated_at INTEGER` on every user-scoped row.** Epoch
+   milliseconds when the row was last written. Sync uses this to
+   determine winners under last-write-wins, and to compute "what
+   changed since I last synced."
+4. **`node_id TEXT` on every user-scoped row.** A UUID minted once per
+   device on first launch, stored in a `local_config` table that
+   itself is **not** synced. Tie-breaks LWW comparisons that share an
+   `updated_at` and identifies the origin device of any change.
+5. **`user_id TEXT NOT NULL` on every user-scoped row.** ADR-009
+   already reserved this as optional; making it NOT NULL on persisted
+   rows is the form that survives sync. v1 hard-codes a single local
+   `user_id` in `local_config`; auth maps remote identity → `user_id`
+   when sync ships.
+
+**Conflict resolution model**: last-write-wins on
+`(updated_at, node_id)`, evaluated per row. For a single-user multi-
+device deployment this is honest — there are no genuinely concurrent
+edits to reconcile, only stale reads. If we ever go collaborative
+(shared calendars across users), we revisit and likely move to a CRDT
+or operational-transform model. The schema accommodates either:
+the columns we are adding are a strict prefix of what CRDTs need.
+
+**The Repository interface**: storage is hidden behind a single
+`Repository` interface so the rest of the codebase imports the interface,
+not SQLite. v1 ships a `SqliteRepository`. When sync ships, a
+`SyncingRepository` wraps the SQLite one and adds push/pull plus
+`changedSince(updatedAt)` and `applyRemoteChanges(changes)` methods —
+which the interface already reserves as no-ops in v1.
+
+**Auth model**: deferred. v1 reads `user_id` from `local_config`,
+treated as opaque. When sync ships, a thin auth layer (email + magic
+link, or OAuth) maps remote identity to `user_id`. Nothing in the data
+model changes; only the bootstrap path does.
+
+**Sync engine choice**: explicitly **not** decided here. When the
+moment comes, the candidates (in approximate order of complexity) are:
+
+- A hand-rolled REST endpoint with push/pull by `updated_at` and LWW
+  — realistic given the data size and single-user model.
+- CouchDB / PouchDB — proven multi-master replication, costs an extra
+  service.
+- Electric SQL or PowerSync — Postgres ↔ SQLite, real-time, both still
+  maturing in early 2026.
+- A CRDT library (Automerge, Yjs) — only if we go collaborative.
+
+The schema we are committing to here works with any of them.
+
+**Would force a revisit**:
+
+- A real use case for collaborative editing (shared calendars across
+  *different* users on the same event). LWW would no longer be
+  honest; a CRDT or OT layer becomes the right answer. The columns we
+  are adding now do not have to be undone — CRDT metadata extends them.
+- Sync turning out to be premature even as scaffolding (user remains
+  single-device forever). The columns still cost essentially nothing,
+  so the downside is small even in that case.
