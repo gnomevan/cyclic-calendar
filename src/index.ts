@@ -62,3 +62,23 @@ export {
   heliacalRisingAngle,
   heliacalSettingAngle,
 } from "./wheels/pleiades.js";
+
+// Serialization (boundary between trusted PinningRule values and untrusted JSON)
+export {
+  serializePinningRule,
+  deserializePinningRule,
+  validatePinningRule,
+  SerializationError,
+} from "./serialize.js";
+
+// Persistence — interface and implementation
+export type {
+  Repository,
+  PersonalAnchor,
+  TravelEntry,
+  ChangeSet,
+  SyncRecord,
+} from "./repository.js";
+export { CONFIG_KEYS, NotImplementedError, newId } from "./repository.js";
+export { SqliteRepository } from "./sqlite.js";
+export type { SqliteRepositoryOptions } from "./sqlite.js";

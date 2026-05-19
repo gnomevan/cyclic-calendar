@@ -21,8 +21,13 @@ export interface CalendarEvent {
  * torus. Past occurrences are persisted because they carry accumulated
  * meaning ("the 14th gathering is the 1st gathering, spiraled forward").
  * Future occurrences are computed on demand and not persisted.
+ *
+ * `id` is optional in the type because in-memory constructions (the demo,
+ * tests) don't always need one. The repository assigns and requires a
+ * UUID when an occurrence is persisted.
  */
 export interface Occurrence {
+  id?: string;
   eventId: string;
   at: Instant;
   /** Where this occurrence happened — for events whose place matters. */
