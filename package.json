@@ -1,0 +1,22 @@
+{
+  "name": "cyclic",
+  "version": "0.1.0",
+  "description": "A planning system whose native time is celestial rather than civil.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "demo": "tsx demo.ts"
+  },
+  "dependencies": {
+    "astronomy-engine": "^2.1.19"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "tsx": "^4.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  }
+}
