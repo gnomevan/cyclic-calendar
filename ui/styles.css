@@ -1,0 +1,119 @@
+:root {
+  --bg: #0f1115;
+  --fg: #e6e6e6;
+  --fg-dim: #8a8f99;
+  --accent: #d4a373;
+  --line: #1f232b;
+  --card: #161a21;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color-scheme: dark;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+header {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-weight: 500;
+  font-size: 1.75rem;
+  letter-spacing: 0.01em;
+}
+
+header .subtitle {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: 0.95rem;
+}
+
+main {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.wheel-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.wheel-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.wheel-card .wheel-kind {
+  color: var(--fg-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wheel-card .current-angle {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--accent);
+  margin: 0.5rem 0 1rem;
+}
+
+.wheel-card .anchor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.wheel-card .anchor-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+
+.wheel-card .anchor-list li:last-child {
+  border-bottom: none;
+}
+
+.anchor-name {
+  color: var(--fg);
+}
+
+.anchor-when {
+  color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.error {
+  color: #ff6b6b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}

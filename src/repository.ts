@@ -154,11 +154,14 @@ export interface Repository {
  *  Helpers
  * ------------------------------------------------------------------------- */
 
-import { randomUUID } from "node:crypto";
-
-/** A fresh UUID suitable for an entity primary key. */
+/**
+ * A fresh UUID suitable for an entity primary key. Uses the Web Crypto API,
+ * which is available on Node 19+ (via globalThis.crypto) and every modern
+ * browser. This keeps the persistence interface importable from browser
+ * bundles, even though `SqliteRepository` itself is Node-only.
+ */
 export function newId(): string {
-  return randomUUID();
+  return globalThis.crypto.randomUUID();
 }
 
 /** Standard local_config keys. Hard-code rather than stringly-typed at sites. */

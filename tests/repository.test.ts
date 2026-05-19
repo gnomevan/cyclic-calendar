@@ -3,7 +3,6 @@ import {
   CONFIG_KEYS,
   NotImplementedError,
   SerializationError,
-  SqliteRepository,
   deserializePinningRule,
   fromISOString,
   newId,
@@ -15,6 +14,7 @@ import {
   type PinningRule,
   type TravelEntry,
 } from "../src/index.js";
+import { SqliteRepository } from "../src/sqlite.js";
 
 const USER = "user-1";
 const REF = fromISOString("2026-01-01T00:00:00Z");

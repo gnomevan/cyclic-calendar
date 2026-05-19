@@ -71,7 +71,10 @@ export {
   SerializationError,
 } from "./serialize.js";
 
-// Persistence — interface and implementation
+// Persistence — interface only. The concrete SqliteRepository lives in
+// `./sqlite.js` and must be imported from there directly. It depends on
+// `better-sqlite3`, a Node native module, and pulling it through this
+// barrel would poison browser bundles. Keep this entry point browser-safe.
 export type {
   Repository,
   PersonalAnchor,
@@ -80,5 +83,3 @@ export type {
   SyncRecord,
 } from "./repository.js";
 export { CONFIG_KEYS, NotImplementedError, newId } from "./repository.js";
-export { SqliteRepository } from "./sqlite.js";
-export type { SqliteRepositoryOptions } from "./sqlite.js";
