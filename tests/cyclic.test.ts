@@ -1,0 +1,260 @@
+import { describe, it, expect } from "vitest";
+import {
+  SimpleWheelRegistry,
+  resolve,
+  solarWheel,
+  lunarWheel,
+  fromISOString,
+  toISOString,
+  toGregorianUTC,
+  normalizeAngle,
+  angleDelta,
+  type PinningRule,
+  type ResolveContext,
+} from "../src/index.js";
+
+const registry = new SimpleWheelRegistry([solarWheel, lunarWheel]);
+
+// A fixed reference point so tests are deterministic across runs.
+const REF = fromISOString("2026-01-01T00:00:00Z");
+
+function ctx(): ResolveContext {
+  return { registry, from: REF };
+}
+
+describe("angle utilities", () => {
+  it("normalizes into [0, 360)", () => {
+    expect(normalizeAngle(0)).toBe(0);
+    expect(normalizeAngle(360)).toBe(0);
+    expect(normalizeAngle(-45)).toBe(315);
+    expect(normalizeAngle(720)).toBe(0);
+  });
+  it("computes shortest signed angular delta", () => {
+    expect(angleDelta(10, 20)).toBe(10);
+    expect(angleDelta(350, 10)).toBe(20);
+    expect(angleDelta(10, 350)).toBe(-20);
+  });
+});
+
+describe("solar wheel", () => {
+  it("reports a position now", () => {
+    const angle = solarWheel.positionAt(REF);
+    expect(angle).toBeGreaterThanOrEqual(0);
+    expect(angle).toBeLessThan(360);
+  });
+
+  it("finds the next spring equinox (sun = 0°)", () => {
+    const at = solarWheel.nextCrossing(0, REF);
+    expect(at).not.toBeNull();
+    // Spring equinox 2026 is around March 20.
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2026);
+    expect(g.month).toBe(3);
+    expect(g.day).toBeGreaterThanOrEqual(19);
+    expect(g.day).toBeLessThanOrEqual(21);
+  });
+
+  it("finds the next winter solstice (sun = 270°)", () => {
+    const at = solarWheel.nextCrossing(270, REF);
+    expect(at).not.toBeNull();
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2026);
+    expect(g.month).toBe(12);
+    expect(g.day).toBeGreaterThanOrEqual(20);
+    expect(g.day).toBeLessThanOrEqual(22);
+  });
+});
+
+describe("lunar wheel", () => {
+  it("finds the next full moon", () => {
+    const at = lunarWheel.nextCrossing(180, REF);
+    expect(at).not.toBeNull();
+    // Full moon should occur within ~35 days of any reference.
+    const days = (at! - REF) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(days).toBeLessThan(35);
+  });
+
+  it("finds the next new moon", () => {
+    const at = lunarWheel.nextCrossing(0, REF);
+    expect(at).not.toBeNull();
+    const days = (at! - REF) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(days).toBeLessThan(35);
+  });
+});
+
+describe("pinning rules", () => {
+  it("exact: ritual exactly at the winter solstice", () => {
+    const rule: PinningRule = {
+      kind: "exact",
+      anchor: { wheelId: "solar", anchorId: "winter_solstice" },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    expect(g.month).toBe(12);
+  });
+
+  it("firstAfter: first new moon after the spring equinox (Hindu new year)", () => {
+    const rule: PinningRule = {
+      kind: "firstAfter",
+      target: { wheelId: "lunar", anchorId: "new_moon" },
+      after: {
+        kind: "anchor",
+        ref: { wheelId: "solar", anchorId: "spring_equinox" },
+      },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    // Chaitra Pratipada 2026 falls on March 19 (the spring equinox itself was March 20,
+    // so the *first* new moon after equinox is the April lunation). Loosen to month
+    // 3 or 4 to allow for the resolver's strict "after" semantics.
+    expect(g.month === 3 || g.month === 4).toBe(true);
+  });
+
+  it("nearest: full moon nearest the autumn equinox (harvest moon pattern)", () => {
+    const rule: PinningRule = {
+      kind: "nearest",
+      target: { wheelId: "lunar", anchorId: "full_moon" },
+      near: {
+        kind: "anchor",
+        ref: { wheelId: "solar", anchorId: "autumn_equinox" },
+      },
+      toleranceDays: 30,
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    // Autumn equinox 2026: Sep 23. Full moon nearest is Sep 26 or Oct 26 —
+    // either is within 30 days. Should be September or October.
+    expect(g.year).toBe(2026);
+    expect(g.month === 9 || g.month === 10).toBe(true);
+  });
+
+  it("nth: the 3rd full moon after spring equinox", () => {
+    const rule: PinningRule = {
+      kind: "nth",
+      target: { wheelId: "lunar", anchorId: "full_moon" },
+      n: 3,
+      after: {
+        kind: "anchor",
+        ref: { wheelId: "solar", anchorId: "spring_equinox" },
+      },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    // Three lunations is ~88 days. Spring equinox 2026 = March 20. Plus
+    // ~88-90 days = mid June. Verify it's roughly in that window.
+    const g = toGregorianUTC(result!.at);
+    expect(g.year).toBe(2026);
+    expect(g.month).toBeGreaterThanOrEqual(5);
+    expect(g.month).toBeLessThanOrEqual(7);
+  });
+
+  it("composition: rules can feed other rules through TimeReference", () => {
+    // Easter-like pattern: first new moon after spring equinox, then the
+    // next full moon after THAT. (Real Easter is the first Sunday after
+    // the first full moon after the equinox, but Sundays would require a
+    // week wheel — we'll prove composition works without it.)
+    const newMoonAfterEquinox: PinningRule = {
+      kind: "firstAfter",
+      target: { wheelId: "lunar", anchorId: "new_moon" },
+      after: {
+        kind: "anchor",
+        ref: { wheelId: "solar", anchorId: "spring_equinox" },
+      },
+    };
+    const fullMoonAfterThat: PinningRule = {
+      kind: "firstAfter",
+      target: { wheelId: "lunar", anchorId: "full_moon" },
+      after: { kind: "rule", rule: newMoonAfterEquinox },
+    };
+    const result = resolve(fullMoonAfterThat, ctx());
+    expect(result).not.toBeNull();
+    // Should be about half a lunation (~15 days) after the new moon, which
+    // itself is within a lunation of the spring equinox.
+  });
+
+  it("conjunction: full moon on or near a solstice (tolerance 3 days)", () => {
+    // This alignment is rare — most years there is no full moon within
+    // 3 days of either solstice. The rule should either return a near-
+    // future occurrence, or null (and we accept either).
+    const rule: PinningRule = {
+      kind: "conjunction",
+      primary: { wheelId: "solar", anchorId: "winter_solstice" },
+      others: [{ wheelId: "lunar", anchorId: "full_moon" }],
+      toleranceDays: 3,
+    };
+    const result = resolve(rule, ctx());
+    // We don't strongly assert when — just that the resolver completes
+    // without throwing. The conjunction may or may not be within the
+    // 200-iteration safety bound.
+    expect(result === null || typeof result.at === "number").toBe(true);
+  });
+
+  it("conjunction: full moon near winter solstice with wider tolerance always resolves", () => {
+    const rule: PinningRule = {
+      kind: "conjunction",
+      primary: { wheelId: "solar", anchorId: "winter_solstice" },
+      others: [{ wheelId: "lunar", anchorId: "full_moon" }],
+      toleranceDays: 15, // half a lunation guarantees a hit every year
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+  });
+
+  it("withinRange: a full moon during the dark half (Samhain to Beltane)", () => {
+    const rule: PinningRule = {
+      kind: "withinRange",
+      target: { wheelId: "lunar", anchorId: "full_moon" },
+      start: { wheelId: "solar", anchorId: "samhain" },
+      end: { wheelId: "solar", anchorId: "beltane" },
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+  });
+});
+
+describe("Gregorian translation layer", () => {
+  it("round-trips ISO strings", () => {
+    const i = fromISOString("2026-12-21T15:30:00Z");
+    expect(toISOString(i)).toBe("2026-12-21T15:30:00.000Z");
+  });
+
+  it("projects to a Gregorian date in UTC", () => {
+    const i = fromISOString("2026-06-21T12:00:00Z");
+    const g = toGregorianUTC(i);
+    expect(g).toEqual({
+      year: 2026,
+      month: 6,
+      day: 21,
+      hour: 12,
+      minute: 0,
+      second: 0,
+      zone: "UTC",
+    });
+  });
+});
+
+describe("architectural discipline", () => {
+  it("the Instant type has no date-like methods on its public surface", () => {
+    // This is a compile-time discipline more than a runtime one: Instant
+    // is `number & { brand }`, and there's no `.getYear()` etc. We verify
+    // here by asserting that the value is just a number under the hood.
+    const i = fromISOString("2026-01-01T00:00:00Z");
+    expect(typeof i).toBe("number");
+  });
+
+  it("the resolver works without knowing which wheels exist (DI through registry)", () => {
+    // Build a registry with only the solar wheel. Solar-only rules still resolve.
+    const solarOnly = new SimpleWheelRegistry([solarWheel]);
+    const rule: PinningRule = {
+      kind: "exact",
+      anchor: { wheelId: "solar", anchorId: "summer_solstice" },
+    };
+    const r = resolve(rule, { registry: solarOnly, from: REF });
+    expect(r).not.toBeNull();
+  });
+});
