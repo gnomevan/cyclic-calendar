@@ -36,17 +36,19 @@ import { useEvents } from "../store.js";
  */
 
 // Stack: ring centers spaced so cards don't collide between rings.
-// With ry=65 (flatter) and neighbor scaling, ~240 between centers is
-// comfortable.
-const RING_SPACING = 240;
+// With ry=65 (flatter) and gentle neighbor scaling, 210 between
+// centers leaves a small but clear gap at the focus↔near transition.
+const RING_SPACING = 210;
 const RINGS_BEFORE = 2;
 const RINGS_AFTER = 2;
 
-// Stack-perspective scales: focus ring full size, neighbors smaller
-// as they recede into the stack.
+// Stack-perspective scales. Linear −0.08 per step from focus, so the
+// scaling is consistent with imagining 13 rings around a torus's
+// solar circumference — the visible 5 are gentle slices of that
+// larger geometry, not a steep drop at the edges.
 const SCALE_FOCUS = 1.0;
-const SCALE_NEIGHBOR_NEAR = 0.85;
-const SCALE_NEIGHBOR_FAR = 0.7;
+const SCALE_NEIGHBOR_NEAR = 0.92;
+const SCALE_NEIGHBOR_FAR = 0.84;
 
 const RING_WIDTH = 960;
 const RING_HEIGHT = RING_RY * 2 + 80; // headroom for card half-heights
