@@ -1,5 +1,7 @@
 import { AnnualRing } from "./views/AnnualRing.js";
 import { CurrentTorus } from "./views/CurrentTorus.js";
+import { EventForm } from "./views/EventForm.js";
+import { EventList } from "./views/EventList.js";
 
 export function App() {
   return (
@@ -10,6 +12,8 @@ export function App() {
       </header>
       <main>
         <AnnualRing />
+        <EventForm />
+        <EventList />
         <CurrentTorus />
       </main>
     </div>

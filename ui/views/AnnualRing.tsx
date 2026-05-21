@@ -5,12 +5,16 @@ import {
   lunarWheel,
   now,
   pleiadesWheel,
+  resolve,
   solarWheel,
   toGregorianUTC,
   type Anchor,
+  type CalendarEvent,
   type Instant,
   type Wheel,
 } from "../../src/index.js";
+import { useEvents } from "../store.js";
+import { wheelRegistry } from "../wheels.js";
 
 /**
  * Annual Ring — a circular projection of the next 365 days from "now".
@@ -20,31 +24,34 @@ import {
  * anchor lives on. "Now" sits at the top (12 o'clock); time flows
  * clockwise; the full circle is exactly 365 days ahead.
  *
- * Three wheels are plotted simultaneously — solar on the outer band
- * (~8 anchors per year), Pleiades in the middle (2 per year), and
- * lunar on the inner band (each phase recurring ~13 times per year).
- * Concentric bands keep the dense lunar markers from colliding with
- * the sparse solar ones.
- *
- * User events are not plotted yet — event creation is Step 3.c.
+ * Four bands are plotted simultaneously, outermost first: user events
+ * (warm orange), solar (~8 anchors/year, gold), Pleiades (2/year, violet),
+ * and lunar phase (~13×/year per phase, silver). User events get their
+ * own outer band so they read as peer to the astronomical wheels rather
+ * than overlaying them.
  */
 
-const SIZE = 520;
+const SIZE = 540;
 const CENTER = SIZE / 2;
-const SOLAR_RADIUS = 218;
-const PLEIADES_RADIUS = 178;
-const LUNAR_RADIUS = 138;
+const USER_RADIUS = 248;
+const SOLAR_RADIUS = 208;
+const PLEIADES_RADIUS = 168;
+const LUNAR_RADIUS = 128;
 const TICK_LENGTH = 14;
 const LUNAR_TICK = 8;
-const MONTH_LABEL_RADIUS = 245;
+const USER_TICK = 18;
+const MONTH_LABEL_RADIUS = 278;
 const SPAN_DAYS = 365;
+const MAX_EVENT_OCCURRENCES = 30;
 
 const PALETTE = {
   solar: "#f4a261",
   lunar: "#cdd5e0",
   pleiades: "#a78bfa",
+  user: "#e76f51",
   ring: "#1f232b",
   ringSoft: "#161a21",
+  ringUser: "#2a2620",
   now: "#d4a373",
   monthLine: "#2a2f38",
   monthLabel: "#8a8f99",
@@ -52,6 +59,7 @@ const PALETTE = {
 
 export function AnnualRing() {
   const [from, setFrom] = useState<Instant>(() => now());
+  const events = useEvents();
 
   useEffect(() => {
     // Once an hour is plenty — the ring spans a year. A finer tick would
@@ -84,6 +92,11 @@ export function AnnualRing() {
     [from, wheels],
   );
 
+  const eventOccurrences = useMemo(
+    () => events.flatMap((event) => eventOccurrencesInWindow(event, from, SPAN_DAYS)),
+    [events, from],
+  );
+
   return (
     <section className="wheel-card annual-ring">
       <div className="wheel-kind">composite</div>
@@ -92,13 +105,14 @@ export function AnnualRing() {
         The next 365 days. Now is at the top; time runs clockwise.
       </p>
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="ring-svg" role="img" aria-label="Annual ring">
+        <circle cx={CENTER} cy={CENTER} r={USER_RADIUS}     fill="none" stroke={PALETTE.ringUser} strokeWidth={1} />
         <circle cx={CENTER} cy={CENTER} r={SOLAR_RADIUS}    fill="none" stroke={PALETTE.ring}     strokeWidth={1.5} />
         <circle cx={CENTER} cy={CENTER} r={PLEIADES_RADIUS} fill="none" stroke={PALETTE.ringSoft} strokeWidth={1} />
         <circle cx={CENTER} cy={CENTER} r={LUNAR_RADIUS}    fill="none" stroke={PALETTE.ringSoft} strokeWidth={1} />
 
         {months.map(({ degrees, label }) => {
           const inner = polarToCartesian(CENTER, CENTER, LUNAR_RADIUS - 16, degrees);
-          const outer = polarToCartesian(CENTER, CENTER, SOLAR_RADIUS + 6, degrees);
+          const outer = polarToCartesian(CENTER, CENTER, USER_RADIUS + 6, degrees);
           const labelAt = polarToCartesian(CENTER, CENTER, MONTH_LABEL_RADIUS, degrees);
           return (
             <g key={label + degrees}>
@@ -130,10 +144,31 @@ export function AnnualRing() {
           );
         })}
 
+        {eventOccurrences.map(({ event, at }) => {
+          const degrees = ringDegrees(at, from, SPAN_DAYS);
+          const a = polarToCartesian(CENTER, CENTER, USER_RADIUS - USER_TICK / 2, degrees);
+          const b = polarToCartesian(CENTER, CENTER, USER_RADIUS + USER_TICK / 2, degrees);
+          return (
+            <line
+              key={`${event.id}-${epochMs(at)}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke={PALETTE.user}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+            >
+              <title>{`${event.name} — ${formatGregorian(at)}`}</title>
+            </line>
+          );
+        })}
+
         <NowMarker />
       </svg>
 
       <ul className="ring-legend">
+        <li><span className="swatch" style={{ background: PALETTE.user }} /> Your events</li>
         <li><span className="swatch" style={{ background: PALETTE.solar }} /> Solar</li>
         <li><span className="swatch" style={{ background: PALETTE.pleiades }} /> Pleiades</li>
         <li><span className="swatch" style={{ background: PALETTE.lunar }} /> Lunar phase</li>
@@ -179,6 +214,41 @@ function anchorsInWindow(
       occurrences.push({ anchor, at: next });
       cursor = next;
     }
+  }
+  return occurrences;
+}
+
+interface EventOccurrence {
+  event: CalendarEvent;
+  at: Instant;
+}
+
+/**
+ * Resolve a user event repeatedly, walking forward from `after`, until
+ * either MAX_EVENT_OCCURRENCES are found, the resolution falls outside
+ * the window, or the resolver returns null. The cap protects against
+ * pathological rules (or a future bug) producing an unbounded list.
+ */
+function eventOccurrencesInWindow(
+  event: CalendarEvent,
+  after: Instant,
+  daysAhead: number,
+): EventOccurrence[] {
+  const endMs = epochMs(after) + daysAhead * 86_400_000;
+  const occurrences: EventOccurrence[] = [];
+  let cursor = after;
+  for (let i = 0; i < MAX_EVENT_OCCURRENCES; i++) {
+    let resolved;
+    try {
+      resolved = resolve(event.rule, { registry: wheelRegistry, from: cursor });
+    } catch {
+      return occurrences; // bad rule — surface what we have, don't crash the ring
+    }
+    if (!resolved) break;
+    if (epochMs(resolved.at) > endMs) break;
+    if (epochMs(resolved.at) <= epochMs(cursor)) break; // resolver didn't advance — abort
+    occurrences.push({ event, at: resolved.at });
+    cursor = instantFromEpochMs(epochMs(resolved.at) + 1000);
   }
   return occurrences;
 }

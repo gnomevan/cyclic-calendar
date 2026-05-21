@@ -169,3 +169,195 @@ main {
   height: 4px;
   border-radius: 2px;
 }
+
+/* ----- Event form ----- */
+.event-form form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.event-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--fg-dim);
+}
+
+.event-form label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fg);
+}
+
+.event-form input[type="text"],
+.event-form input[type="number"],
+.event-form input[type="datetime-local"],
+.event-form textarea,
+.event-form select {
+  background: #0c0e13;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.event-form textarea {
+  resize: vertical;
+  min-height: 2.5rem;
+}
+
+.event-form input:focus,
+.event-form textarea:focus,
+.event-form select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.event-form button[type="submit"] {
+  justify-self: start;
+  background: var(--accent);
+  color: #0f1115;
+  border: none;
+  padding: 0.55rem 1rem;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.event-form button[type="submit"]:hover {
+  filter: brightness(1.1);
+}
+
+.event-form fieldset {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.6rem 0.75rem;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.event-form fieldset legend {
+  font-size: 0.8rem;
+  color: var(--fg-dim);
+  padding: 0 0.3rem;
+}
+
+.event-form .anchor-picker,
+.event-form .timeref-picker {
+  grid-template-columns: 1fr 1fr;
+}
+
+.event-form .timeref-picker {
+  grid-template-columns: 1fr;
+}
+
+.event-form .others-picker {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.event-form .others-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--fg-dim);
+}
+
+.event-form .others-header button,
+.event-form .others-row button {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.2rem 0.45rem;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.event-form .others-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.event-form .others-row .anchor-picker {
+  flex: 1;
+}
+
+.event-form .hint {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* ----- Event list ----- */
+.event-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.event-list li {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+
+.event-list li:first-child {
+  border-top: none;
+}
+
+.event-row-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.event-name {
+  font-weight: 500;
+}
+
+.event-kind {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--fg-dim);
+  margin-top: 0.1rem;
+}
+
+.event-desc {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--fg);
+}
+
+.event-next {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--fg-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.event-list .remove {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.25rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.event-list .remove:hover {
+  color: #ff8a7e;
+  border-color: #4a2520;
+}
