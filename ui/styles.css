@@ -24,28 +24,84 @@ body {
 }
 
 .app {
-  max-width: 880px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
 }
 
-header {
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
   border-bottom: 1px solid var(--line);
   padding-bottom: 1.25rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
-header h1 {
+.app-titles h1 {
   margin: 0 0 0.25rem;
   font-weight: 500;
   font-size: 1.75rem;
   letter-spacing: 0.01em;
 }
 
-header .subtitle {
+.app-titles .subtitle {
   margin: 0;
   color: var(--fg-dim);
   font-size: 0.95rem;
+  max-width: 28rem;
+}
+
+.app-dials {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.orrery,
+.concentric-overview {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  padding: 4px;
+}
+
+.view-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.view-switcher {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-switcher button {
+  background: transparent;
+  color: var(--fg-dim);
+  border: none;
+  padding: 0.4rem 0.85rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-right: 1px solid var(--line);
+}
+
+.view-switcher button:last-child {
+  border-right: none;
+}
+
+.view-switcher button:hover {
+  color: var(--fg);
+}
+
+.view-switcher button.active {
+  background: var(--card);
+  color: var(--accent);
 }
 
 main {
@@ -360,4 +416,141 @@ main {
 .event-list .remove:hover {
   color: #ff8a7e;
   border-color: #4a2520;
+}
+
+/* ----- Moonth view ----- */
+.moonth-view {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem 1.75rem;
+}
+
+.moonth-header h2 {
+  margin: 0 0 0.35rem;
+  font-weight: 500;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.moonth-caption {
+  margin: 0 0 1rem;
+  color: var(--fg-dim);
+  font-size: 0.9rem;
+  max-width: 38rem;
+}
+
+.moonth-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+}
+
+.moonth-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.moonth-cards {
+  position: absolute;
+  inset: 0;
+}
+
+.moonth-card-slot {
+  position: absolute;
+}
+
+/* ----- Day card ----- */
+.day-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.55rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow: hidden;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.day-card:hover {
+  border-color: var(--fg-dim);
+}
+
+.day-card-today {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.day-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.day-card-gregorian {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  color: var(--fg-dim);
+  letter-spacing: 0.02em;
+}
+
+.day-card-number {
+  font-size: 1.4rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.day-card-today .day-card-number {
+  color: var(--accent);
+}
+
+.day-card-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.day-card-events li {
+  font-size: 0.72rem;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 0.4rem;
+  position: relative;
+}
+
+.day-card-events li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+.day-card-events .day-card-overflow {
+  color: var(--fg-dim);
+  font-style: italic;
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .app-dials {
+    justify-content: flex-start;
+  }
 }
