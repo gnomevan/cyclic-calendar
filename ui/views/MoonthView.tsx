@@ -36,9 +36,9 @@ import { useEvents } from "../store.js";
  */
 
 // Stack: ring centers spaced so cards don't collide between rings.
-// With ry=65 (flatter) and gentle neighbor scaling, 210 between
-// centers leaves a small but clear gap at the focus↔near transition.
-const RING_SPACING = 210;
+// Cards are shorter now (72 tall vs the old 112), so the safe spacing
+// drops too — 190 keeps a clean gap at the focus↔near transition.
+const RING_SPACING = 190;
 const RINGS_BEFORE = 2;
 const RINGS_AFTER = 2;
 

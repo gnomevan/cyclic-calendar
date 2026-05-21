@@ -28,8 +28,10 @@ import { wheelRegistry } from "../wheels.js";
 export const DAYS_IN_MOONTH = 28;
 export const RING_RX = 420;
 export const RING_RY = 65;
-export const CARD_WIDTH = 72;
-export const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.55);
+// Card width chosen so cards just touch at the front of the wheel.
+// Chord spacing between adjacent cards at angle 180° = RX · sin(360°/28) ≈ 93.5.
+export const CARD_WIDTH = 94;
+export const CARD_HEIGHT = 72;
 const SCALE_MIN = 0.42;
 const OPACITY_MIN = 0.32;
 
