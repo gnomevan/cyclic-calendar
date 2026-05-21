@@ -76,7 +76,7 @@ export function DayCard({
   return (
     <div className={classes.join(" ")} style={{ width, height }}>
       <div className="day-card-head">
-        <MoonGlyph angle={moonAngle} size={18} />
+        <MoonGlyph angle={moonAngle} size={22} />
         <span className="day-card-number">{moonthDay}</span>
         <div className="day-card-greg">
           <span className="day-card-greg-month">{greMonth}</span>

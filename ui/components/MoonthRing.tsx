@@ -26,12 +26,13 @@ import { wheelRegistry } from "../wheels.js";
  */
 
 export const DAYS_IN_MOONTH = 28;
-export const RING_RX = 420;
+export const RING_RX = 475;
 export const RING_RY = 65;
 // Card width chosen so cards just touch at the front of the wheel.
-// Chord spacing between adjacent cards at angle 180° = RX · sin(360°/28) ≈ 93.5.
-export const CARD_WIDTH = 94;
-export const CARD_HEIGHT = 72;
+// Chord spacing between adjacent cards at angle 180° = RX · sin(360°/28) ≈ 105.5.
+export const CARD_WIDTH = 105;
+// Golden ratio (taller than wide).
+export const CARD_HEIGHT = 170;
 const SCALE_MIN = 0.42;
 const OPACITY_MIN = 0.32;
 

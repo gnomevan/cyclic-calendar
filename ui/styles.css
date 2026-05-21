@@ -24,7 +24,7 @@ body {
 }
 
 .app {
-  max-width: 1100px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
 }
@@ -564,8 +564,8 @@ main {
 .day-card-head {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px 3px;
+  gap: 5px;
+  padding: 5px 7px 4px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -576,7 +576,7 @@ main {
 .day-card-number {
   flex: 1;
   text-align: center;
-  font-size: 1.05rem;
+  font-size: 1.25rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -610,13 +610,13 @@ main {
 }
 
 .day-card-greg-month {
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   color: var(--fg-dim);
   text-transform: uppercase;
 }
 
 .day-card-greg-day {
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   color: var(--fg);
   margin-top: 1px;
 }
@@ -629,25 +629,25 @@ main {
 .day-card-events {
   list-style: none;
   margin: 0;
-  padding: 3px 5px 4px;
+  padding: 6px 7px 7px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 3px;
   flex: 1;
   overflow: hidden;
 }
 
 .day-card-events li {
-  font-size: 0.6rem;
-  line-height: 1.15;
+  font-size: 0.78rem;
+  line-height: 1.2;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-left: 8px;
+  padding-left: 10px;
   position: relative;
   display: flex;
-  gap: 4px;
+  gap: 5px;
   align-items: baseline;
 }
 
@@ -657,14 +657,14 @@ main {
   left: 0;
   top: 0;
   color: var(--accent);
-  font-size: 0.75rem;
-  line-height: 1;
+  font-size: 0.95rem;
+  line-height: 1.05;
 }
 
 .day-card-events time {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--fg-dim);
-  font-size: 0.55rem;
+  font-size: 0.68rem;
   flex: 0 0 auto;
 }
 

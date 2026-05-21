@@ -36,9 +36,10 @@ import { useEvents } from "../store.js";
  */
 
 // Stack: ring centers spaced so cards don't collide between rings.
-// Cards are shorter now (72 tall vs the old 112), so the safe spacing
-// drops too — 190 keeps a clean gap at the focus↔near transition.
-const RING_SPACING = 190;
+// With golden-ratio cards (170 tall) and the gentle neighbor scaling
+// curve, 260 between centers keeps a clear gap at the focus↔near
+// transition.
+const RING_SPACING = 260;
 const RINGS_BEFORE = 2;
 const RINGS_AFTER = 2;
 
@@ -50,8 +51,10 @@ const SCALE_FOCUS = 1.0;
 const SCALE_NEIGHBOR_NEAR = 0.92;
 const SCALE_NEIGHBOR_FAR = 0.84;
 
-const RING_WIDTH = 960;
-const RING_HEIGHT = RING_RY * 2 + 80; // headroom for card half-heights
+// Canvas wide enough to fit the wheel — side cards at x = ±RX, plus
+// half a card width of overhang on each side.
+const RING_WIDTH = 1060;
+const RING_HEIGHT = RING_RY * 2 + 100; // headroom for the taller cards
 
 // Solar year track height matches the total ring-stack height plus
 // the half-card extents on top and bottom.
