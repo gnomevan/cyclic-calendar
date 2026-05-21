@@ -440,12 +440,46 @@ main {
   max-width: 38rem;
 }
 
+.moonth-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 1.25rem;
+}
+
+.solar-year-track {
+  flex: 0 0 auto;
+  border-right: 1px solid var(--line);
+  padding-right: 0.5rem;
+}
+
+.moonth-stage {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.moonth-neighbor {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--fg-dim);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  background: transparent;
+}
+
+.moonth-neighbor-arrow {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--accent);
+}
+
 .moonth-canvas-wrap {
   position: relative;
   width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
-  aspect-ratio: 940 / 620;
 }
 
 .moonth-canvas {
@@ -467,17 +501,18 @@ main {
   will-change: transform, opacity;
 }
 
-/* ----- Day card ----- */
+/* ----- Day card (portrait) ----- */
 .day-card {
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0.5rem 0.55rem 0.4rem;
+  border-radius: 5px;
+  padding: 0.35rem 0.4rem 0.3rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.15rem;
   overflow: hidden;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .day-card:hover {
@@ -489,22 +524,8 @@ main {
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-.day-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.day-card-gregorian {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.7rem;
-  color: var(--fg-dim);
-  letter-spacing: 0.02em;
-}
-
 .day-card-number {
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
@@ -515,24 +536,33 @@ main {
   color: var(--accent);
 }
 
+.day-card-gregorian {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  color: var(--fg-dim);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.1rem;
+}
+
 .day-card-events {
   list-style: none;
   margin: 0;
   padding: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  flex: 1;
   overflow: hidden;
 }
 
 .day-card-events li {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
+  line-height: 1.15;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-left: 0.4rem;
+  padding-left: 0.3rem;
   position: relative;
 }
 
@@ -541,6 +571,7 @@ main {
   position: absolute;
   left: 0;
   color: var(--accent);
+  font-size: 0.6rem;
 }
 
 .day-card-events .day-card-overflow {
