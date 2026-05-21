@@ -4,6 +4,7 @@ import {
   type CalendarEvent,
   type Instant,
 } from "../../src/index.js";
+import { setEditingEventId } from "../editing.js";
 import { MoonGlyph } from "./MoonGlyph.js";
 
 /**
@@ -86,9 +87,16 @@ export function DayCard({
       ) : (
         <ul className="day-card-events">
           {visible.map(({ event, at: occurrenceAt }) => (
-            <li key={event.id} title={event.description ?? event.name}>
-              <time>{formatTime(occurrenceAt)}</time>
-              <span className="day-card-event-name">{event.name}</span>
+            <li key={event.id}>
+              <button
+                type="button"
+                className="day-card-event-btn"
+                title={event.description ?? event.name}
+                onClick={() => setEditingEventId(event.id)}
+              >
+                <time>{formatTime(occurrenceAt)}</time>
+                <span className="day-card-event-name">{event.name}</span>
+              </button>
             </li>
           ))}
           {overflow > 0 && (

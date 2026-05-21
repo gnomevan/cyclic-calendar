@@ -8,6 +8,7 @@ import {
   type PinningRule,
   type TimeReference,
 } from "../../src/index.js";
+import { setEditingEventId, useEditingEventId } from "../editing.js";
 import { removeEvent, useEvents } from "../store.js";
 import { wheelRegistry } from "../wheels.js";
 
@@ -19,13 +20,9 @@ import { wheelRegistry } from "../wheels.js";
  * time passes.
  */
 
-interface EventListProps {
-  editingEventId: string | null;
-  onEdit: (id: string) => void;
-}
-
-export function EventList({ editingEventId, onEdit }: EventListProps) {
+export function EventList() {
   const events = useEvents();
+  const editingEventId = useEditingEventId();
   const [from, setFrom] = useState<Instant>(() => now());
 
   useEffect(() => {
@@ -57,7 +54,6 @@ export function EventList({ editingEventId, onEdit }: EventListProps) {
             event={event}
             from={from}
             isEditing={editingEventId === event.id}
-            onEdit={onEdit}
           />
         ))}
       </ul>
@@ -69,10 +65,9 @@ interface EventRowProps {
   event: CalendarEvent;
   from: Instant;
   isEditing: boolean;
-  onEdit: (id: string) => void;
 }
 
-function EventRow({ event, from, isEditing, onEdit }: EventRowProps) {
+function EventRow({ event, from, isEditing }: EventRowProps) {
   const nextAt = useMemo(() => {
     try {
       return resolve(event.rule, { registry: wheelRegistry, from })?.at ?? null;
@@ -90,7 +85,7 @@ function EventRow({ event, from, isEditing, onEdit }: EventRowProps) {
           {event.description && <div className="event-desc">{event.description}</div>}
         </div>
         <div className="event-row-actions">
-          <button type="button" className="edit" onClick={() => onEdit(event.id)}>
+          <button type="button" className="edit" onClick={() => setEditingEventId(event.id)}>
             edit
           </button>
           <button type="button" className="remove" onClick={() => removeEvent(event.id)}>

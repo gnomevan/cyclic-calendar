@@ -9,10 +9,6 @@ import { MoonthView } from "./views/MoonthView.js";
 
 export function App() {
   const [mode, setMode] = useState<ViewMode>("moonth");
-  // Currently-edited event id. The form reads it (to pre-populate) and
-  // the list writes it (when the user clicks Edit). Lives at App-level
-  // because both children need to see and change it.
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   return (
     <div className="app">
@@ -33,14 +29,8 @@ export function App() {
 
       <main>
         {mode === "moonth" ? <MoonthView /> : <AnnualRing />}
-        <EventForm
-          editingEventId={editingEventId}
-          onClearEdit={() => setEditingEventId(null)}
-        />
-        <EventList
-          editingEventId={editingEventId}
-          onEdit={(id) => setEditingEventId(id)}
-        />
+        <EventForm />
+        <EventList />
       </main>
     </div>
   );

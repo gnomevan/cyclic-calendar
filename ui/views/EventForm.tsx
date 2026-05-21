@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type AnchorRef,
   type PinningRule,
@@ -6,6 +6,7 @@ import {
 } from "../../src/index.js";
 import { AnchorPicker } from "../components/AnchorPicker.js";
 import { TimeRefPicker } from "../components/TimeRefPicker.js";
+import { setEditingEventId, useEditingEventId } from "../editing.js";
 import { addEvent, updateEvent, useEvents } from "../store.js";
 
 /**
@@ -48,18 +49,15 @@ interface RuleDraft {
   observationKey?: string;
 }
 
-interface EventFormProps {
-  /** If set, the form edits the event with this id rather than creating new. */
-  editingEventId: string | null;
-  /** Called to clear edit mode (after successful save, or when user cancels). */
-  onClearEdit: () => void;
-}
-
-export function EventForm({ editingEventId, onClearEdit }: EventFormProps) {
+export function EventForm() {
   const events = useEvents();
+  const editingEventId = useEditingEventId();
   const editingEvent = editingEventId
     ? events.find((e) => e.id === editingEventId) ?? null
     : null;
+
+  const formRef = useRef<HTMLElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -67,8 +65,9 @@ export function EventForm({ editingEventId, onClearEdit }: EventFormProps) {
   const [draft, setDraft] = useState<RuleDraft>({ kind: "exact" });
   const [error, setError] = useState<string | null>(null);
 
-  // When the editing target changes (e.g., user clicks Edit on a list
-  // item), pull its fields into the form. When edit mode clears, reset
+  // When the editing target changes (e.g., user clicks an event on a
+  // card), pull its fields into the form and scroll the form into view
+  // so the click has visible feedback. When edit mode clears, reset
   // the form back to empty.
   useEffect(() => {
     if (editingEvent) {
@@ -77,12 +76,14 @@ export function EventForm({ editingEventId, onClearEdit }: EventFormProps) {
       setIsOrigin(editingEvent.isOrigin ?? false);
       setDraft(ruleToDraft(editingEvent.rule));
       setError(null);
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Focus the name field once the scroll settles.
+      window.setTimeout(() => nameRef.current?.focus(), 350);
     } else {
       reset();
     }
-    // We intentionally key only on the id so the user's in-flight edits
-    // are not clobbered every render when the events list reference
-    // changes for unrelated reasons.
+    // Key only on the id so the user's in-flight edits aren't clobbered
+    // every render when the events list reference changes for unrelated reasons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingEventId]);
 
@@ -99,7 +100,7 @@ export function EventForm({ editingEventId, onClearEdit }: EventFormProps) {
   }
 
   function handleCancel() {
-    onClearEdit();
+    setEditingEventId(null);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -125,20 +126,21 @@ export function EventForm({ editingEventId, onClearEdit }: EventFormProps) {
     } else {
       addEvent(input);
     }
-    onClearEdit();
+    setEditingEventId(null);
     reset();
   }
 
   const isEditing = editingEventId !== null;
 
   return (
-    <section className="wheel-card event-form">
+    <section ref={formRef} className="wheel-card event-form">
       <div className="wheel-kind">{isEditing ? "edit" : "create"}</div>
       <h2>{isEditing ? "Edit event" : "New event"}</h2>
       <form onSubmit={handleSubmit}>
         <label>
           Name
           <input
+            ref={nameRef}
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}

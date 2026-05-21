@@ -683,33 +683,54 @@ main {
   padding: 6px 7px 7px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   flex: 1;
   overflow: hidden;
 }
 
 .day-card-events li {
+  position: relative;
+}
+
+.day-card-event-btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
   font-size: 0.78rem;
   line-height: 1.2;
   color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 10px;
-  position: relative;
+  padding: 1px 4px 1px 12px;
+  border-radius: 3px;
   display: flex;
   gap: 5px;
   align-items: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  transition: background 0.1s ease;
 }
 
-.day-card-events li::before {
+.day-card-event-btn::before {
   content: "•";
   position: absolute;
-  left: 0;
+  left: 2px;
   top: 0;
   color: var(--accent);
   font-size: 0.95rem;
   line-height: 1.05;
+}
+
+.day-card-event-btn:hover {
+  background: rgba(212, 163, 115, 0.12);
+}
+
+.day-card-event-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .day-card-events time {
