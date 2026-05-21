@@ -117,3 +117,55 @@ main {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
 }
+
+.annual-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.annual-ring h2 {
+  align-self: flex-start;
+}
+
+.annual-ring .wheel-kind {
+  align-self: flex-start;
+}
+
+.ring-caption {
+  align-self: flex-start;
+  margin: 0 0 0.75rem;
+  color: var(--fg-dim);
+  font-size: 0.9rem;
+}
+
+.ring-svg {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  display: block;
+}
+
+.ring-legend {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--fg-dim);
+}
+
+.ring-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+}
