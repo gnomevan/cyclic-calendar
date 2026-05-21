@@ -16,27 +16,42 @@ import { useEvents } from "../store.js";
 import { wheelRegistry } from "../wheels.js";
 
 /**
- * MoonthView — the cycles-first daily-use canvas.
+ * MoonthView — user-centric, perspective-tilted moonth wheel.
  *
- * 28 day cards arranged on a clock face, starting at the most recent
- * new moon and walking 27 days forward. Behind them, a wide faint arc
- * of the solar year — enough of the arc to show where this moonth
- * sits within the year, with nearby solar anchors marked.
+ * The 28-day moonth wraps around a horizontal ellipse, viewed from
+ * slightly below — like looking at a tilted dial. The focused day
+ * (today by default) sits at the bottom-center, closest to the
+ * viewer, biggest. Recent days fan off to the left, upcoming days to
+ * the right. Cards scale down and fade as they recede into the back
+ * of the wheel; the card opposite today (~14 days away on the cycle)
+ * is smallest and dimmest.
  *
- * Today's card is highlighted. The moon glyph on each card reflects
- * the lunar wheel's actual phase angle for the noon of that day, so
- * the eye can sweep around the clock and see the moon waxing and
- * waning the way it does in life.
+ * Behind the moonth wheel, a much larger concentric solar-year arc
+ * is drawn — a tilted ellipse on the same perspective, with the
+ * eight cardinal solar anchors marked, and the segment occupied by
+ * this moonth highlighted in accent color. The solar arc is bold
+ * enough to read at a glance: it answers "where in the year are we?"
+ * without leaving the moonth view.
  */
 
 const DAYS_IN_MOONTH = 28;
-const CANVAS_SIZE = 760;
-const CENTER = CANVAS_SIZE / 2;
-const CARD_RING_RADIUS = 270;
-const CARD_SIZE = 112;
-const SOLAR_ARC_INNER_R = 340;
-const SOLAR_ARC_OUTER_R = 372;
-const SOLAR_LABEL_R = 358;
+
+const CANVAS_W = 940;
+const CANVAS_H = 620;
+const CENTER_X = CANVAS_W / 2;
+const CENTER_Y = CANVAS_H * 0.55;
+
+// Moonth wheel: a tilted ellipse, today at bottom.
+const MOON_RX = 350;
+const MOON_RY = 175;
+
+// Solar year wheel: a larger concentric tilted ellipse, behind.
+const SOLAR_RX = 440;
+const SOLAR_RY = 220;
+
+const CARD_BASE_SIZE = 118;
+const SCALE_MIN = 0.42;
+const OPACITY_MIN = 0.32;
 
 const SOLAR_ANCHOR_SHORT: Record<string, string> = {
   spring_equinox: "Spring",
@@ -60,8 +75,6 @@ export function MoonthView() {
 
   const moonthStart = useMemo(() => findRecentNewMoon(nowInstant), [nowInstant]);
 
-  // Build the 28 day instants, anchored at noon UTC of each day so
-  // the moon-phase reading isn't dominated by the midnight rollover.
   const days = useMemo<DayInfo[]>(() => {
     const startNoonMs = midnightUtc(moonthStart) + 12 * 60 * 60 * 1000;
     const todayNoonMs = midnightUtc(nowInstant) + 12 * 60 * 60 * 1000;
@@ -77,21 +90,43 @@ export function MoonthView() {
     });
   }, [moonthStart, nowInstant]);
 
+  // Find today's day-in-moonth (1..28). Default to day 1 if "today"
+  // somehow isn't in the window (e.g., we just rolled past day 28 and
+  // findRecentNewMoon hasn't caught up by a hair).
+  const focusDay = useMemo(() => days.find((d) => d.isToday)?.moonthDay ?? 1, [days]);
   const moonthEndExclusive = useMemo(
     () => instantFromEpochMs(epochMs(days[DAYS_IN_MOONTH - 1]!.at) + 86_400_000),
     [days],
   );
 
-  // Group events by which day-of-moonth they fall on (if any).
   const eventsByDay = useMemo(
     () => groupEventsByDay(events, days[0]!.at, moonthEndExclusive),
     [events, days, moonthEndExclusive],
   );
 
-  // Solar arc: render a generous span around the current moonth (±90 days)
-  // so the user sees several solar anchors as context, with the active
-  // moonth segment emphasized.
-  const solar = useMemo(() => computeSolarArc(moonthStart, moonthEndExclusive), [moonthStart, moonthEndExclusive]);
+  const solar = useMemo(
+    () => computeSolarMarkers(days[0]!.at, days[DAYS_IN_MOONTH - 1]!.at, nowInstant),
+    [days, nowInstant],
+  );
+
+  // Compute each card's geometry. Sort by depth so back cards render
+  // first (so close cards layer over far ones).
+  const placedCards = useMemo(() => {
+    return days
+      .map((d) => {
+        const angle = bottomCenteredAngle(d.moonthDay, focusDay);
+        const rad = (angle * Math.PI) / 180;
+        const x = CENTER_X + MOON_RX * Math.sin(rad);
+        const y = CENTER_Y - MOON_RY * Math.cos(rad);
+        // depth t: 0 at bottom (focused), 1 at top (opposite).
+        const t = (1 - Math.cos(((angle - 180) * Math.PI) / 180)) / 2;
+        const scale = 1 - (1 - SCALE_MIN) * t;
+        const opacity = 1 - (1 - OPACITY_MIN) * t;
+        // z-stacking: cards with larger y are in front.
+        return { day: d, x, y, scale, opacity, depth: t };
+      })
+      .sort((a, b) => b.depth - a.depth); // farthest first
+  }, [days, focusDay]);
 
   return (
     <section className="moonth-view">
@@ -100,180 +135,199 @@ export function MoonthView() {
           <h2>This moonth</h2>
           <p className="moonth-caption">
             28 days from the most recent new moon ({formatDate(days[0]!.at)})
-            to the next ({formatDate(days[DAYS_IN_MOONTH - 1]!.at)}). The arc
-            behind is the solar year; the brighter segment is where this
-            moonth lives.
+            to the next ({formatDate(days[DAYS_IN_MOONTH - 1]!.at)}). Today is
+            at the front; recent days are to the left, days ahead to the right.
           </p>
         </div>
       </header>
 
       <div className="moonth-canvas-wrap">
         <svg
-          viewBox={`0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`}
+          viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
           className="moonth-canvas"
           role="img"
           aria-label="The current moonth"
+          preserveAspectRatio="xMidYMid meet"
         >
-          {/* Solar arc backdrop */}
-          <SolarArcBackdrop solar={solar} />
-
-          {/* Today radial pointer */}
-          <TodayPointer
-            instant={nowInstant}
-            moonthStart={moonthStart}
-            moonthEndExclusive={moonthEndExclusive}
-          />
+          <SolarBackdrop solar={solar} />
         </svg>
 
-        {/* Day cards positioned absolutely over the SVG using the same
-            polar math. They are HTML for accessibility and event handling. */}
         <div className="moonth-cards">
-          {days.map((d) => {
-            const angle = (d.moonthDay - 1) * (360 / DAYS_IN_MOONTH);
-            const p = polar(CENTER, CENTER, CARD_RING_RADIUS, angle);
-            return (
-              <div
-                key={d.moonthDay}
-                className="moonth-card-slot"
-                style={{
-                  left: `calc(${(p.x / CANVAS_SIZE) * 100}% - ${CARD_SIZE / 2}px)`,
-                  top: `calc(${(p.y / CANVAS_SIZE) * 100}% - ${CARD_SIZE / 2}px)`,
-                }}
-              >
-                <DayCard
-                  moonthDay={d.moonthDay}
-                  moonAngle={d.moonAngle}
-                  at={d.at}
-                  isToday={d.isToday}
-                  events={eventsByDay.get(d.moonthDay) ?? []}
-                  size={CARD_SIZE}
-                />
-              </div>
-            );
-          })}
+          {placedCards.map(({ day, x, y, scale, opacity }) => (
+            <div
+              key={day.moonthDay}
+              className="moonth-card-slot"
+              style={{
+                left: `calc(${(x / CANVAS_W) * 100}% - ${CARD_BASE_SIZE / 2}px)`,
+                top: `calc(${(y / CANVAS_H) * 100}% - ${CARD_BASE_SIZE / 2}px)`,
+                transform: `scale(${scale})`,
+                opacity,
+                zIndex: Math.round(y),
+              }}
+            >
+              <DayCard
+                moonthDay={day.moonthDay}
+                moonAngle={day.moonAngle}
+                at={day.at}
+                isToday={day.isToday}
+                events={eventsByDay.get(day.moonthDay) ?? []}
+                size={CARD_BASE_SIZE}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-/* ----- subcomponents -------------------------------------------------- */
+/* ----- Solar arc backdrop -------------------------------------------- */
 
-interface SolarArcInfo {
-  midDeg: number;
-  rangeDeg: number;
-  anchors: { id: string; angleOnArc: number; label: string }[];
+interface SolarMarker {
+  id: string;
+  label: string;
+  ringAngle: number;
 }
 
-function SolarArcBackdrop({ solar }: { solar: SolarArcInfo }) {
-  // Arc endpoints
-  const startDeg = -solar.rangeDeg / 2;
-  const endDeg = solar.rangeDeg / 2;
-  const arcOuter = describeArc(CENTER, CENTER, SOLAR_ARC_OUTER_R, startDeg, endDeg);
-  const arcInner = describeArc(CENTER, CENTER, SOLAR_ARC_INNER_R, startDeg, endDeg);
-  const arcMid = describeArc(CENTER, CENTER, (SOLAR_ARC_INNER_R + SOLAR_ARC_OUTER_R) / 2, startDeg, endDeg);
+interface SolarMarkersInfo {
+  markers: SolarMarker[];
+  moonthArcStartAngle: number; // angle on the moonth wheel where moonth-start sits
+  moonthArcEndAngle: number;
+  moonthMidAngle: number;
+}
+
+function SolarBackdrop({ solar }: { solar: SolarMarkersInfo }) {
+  // Faint full year ellipse.
+  const fullRing = describeEllipseFull(CENTER_X, CENTER_Y, SOLAR_RX, SOLAR_RY);
+  // The active moonth segment, drawn brightly on the solar ellipse.
+  const active = describeEllipseArc(
+    CENTER_X,
+    CENTER_Y,
+    SOLAR_RX,
+    SOLAR_RY,
+    solar.moonthArcStartAngle,
+    solar.moonthArcEndAngle,
+  );
 
   return (
-    <g>
-      {/* Faint outer and inner edges of the arc */}
-      <path d={arcOuter} fill="none" stroke="#1f232b" strokeWidth={1} />
-      <path d={arcInner} fill="none" stroke="#1f232b" strokeWidth={1} />
-      <path d={arcMid} fill="none" stroke="#1f232b" strokeWidth={0.5} opacity={0.6} />
+    <g className="solar-backdrop">
+      {/* Soft halo behind the active segment */}
+      <path
+        d={describeEllipseArc(
+          CENTER_X,
+          CENTER_Y,
+          SOLAR_RX,
+          SOLAR_RY,
+          solar.moonthArcStartAngle - 6,
+          solar.moonthArcEndAngle + 6,
+        )}
+        fill="none"
+        stroke="#d4a373"
+        strokeWidth={18}
+        strokeLinecap="round"
+        opacity={0.12}
+      />
 
-      {/* Active moonth segment within the arc (the "now" patch) */}
-      {(() => {
-        const halfWindow = DAYS_IN_MOONTH * (360 / 365.2422) / 2;
-        const active = describeArc(
-          CENTER,
-          CENTER,
-          (SOLAR_ARC_INNER_R + SOLAR_ARC_OUTER_R) / 2,
-          -halfWindow,
-          halfWindow,
-        );
-        return (
-          <path
-            d={active}
-            fill="none"
-            stroke="#d4a373"
-            strokeWidth={3}
-            strokeLinecap="round"
-            opacity={0.7}
-          />
-        );
-      })()}
+      {/* The full solar year ring — faint */}
+      <path d={fullRing} fill="none" stroke="#3a3f4a" strokeWidth={1.5} />
 
-      {/* Solar anchors visible within the rendered arc range */}
-      {solar.anchors.map((a) => {
-        const p = polar(CENTER, CENTER, (SOLAR_ARC_INNER_R + SOLAR_ARC_OUTER_R) / 2, a.angleOnArc);
-        const labelP = polar(CENTER, CENTER, SOLAR_LABEL_R + 8, a.angleOnArc);
-        const tickInner = polar(CENTER, CENTER, SOLAR_ARC_INNER_R - 4, a.angleOnArc);
-        const tickOuter = polar(CENTER, CENTER, SOLAR_ARC_OUTER_R + 4, a.angleOnArc);
+      {/* The active moonth segment */}
+      <path d={active} fill="none" stroke="#d4a373" strokeWidth={5} strokeLinecap="round" opacity={0.85} />
+
+      {/* Solar anchors as labeled markers */}
+      {solar.markers.map((m) => {
+        const inner = ellipsePoint(CENTER_X, CENTER_Y, SOLAR_RX - 12, SOLAR_RY - 8, m.ringAngle);
+        const outer = ellipsePoint(CENTER_X, CENTER_Y, SOLAR_RX + 12, SOLAR_RY + 8, m.ringAngle);
+        const labelPos = ellipsePoint(CENTER_X, CENTER_Y, SOLAR_RX + 38, SOLAR_RY + 30, m.ringAngle);
         return (
-          <g key={a.id}>
-            <line x1={tickInner.x} y1={tickInner.y} x2={tickOuter.x} y2={tickOuter.y} stroke="#5a5f6a" strokeWidth={1} />
-            <circle cx={p.x} cy={p.y} r={2} fill="#8a8f99" />
+          <g key={m.id}>
+            <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke="#9aa0ab" strokeWidth={1.5} />
+            <circle cx={outer.x} cy={outer.y} r={3.5} fill="#cdd5e0" />
             <text
-              x={labelP.x}
-              y={labelP.y}
+              x={labelPos.x}
+              y={labelPos.y}
               textAnchor="middle"
               dominantBaseline="middle"
-              fontSize="11"
-              fill="#8a8f99"
+              fontSize="13"
+              fill="#cdd5e0"
+              fontFamily="ui-sans-serif, system-ui, sans-serif"
             >
-              {a.label}
+              {m.label}
             </text>
           </g>
         );
       })}
 
-      {/* Small center label */}
-      <text x={CENTER} y={CENTER - 6} textAnchor="middle" fontSize="11" fill="#5a5f6a">
-        solar year
-      </text>
-      <text x={CENTER} y={CENTER + 10} textAnchor="middle" fontSize="11" fill="#5a5f6a">
-        (context arc)
+      {/* "Today" pointer from solar ring down to moonth front */}
+      <SolarTodayPointer />
+
+      {/* Solar-year caption */}
+      <text
+        x={CENTER_X}
+        y={CANVAS_H - 14}
+        textAnchor="middle"
+        fontSize="11"
+        fill="#8a8f99"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        solar year ↻
       </text>
     </g>
   );
 }
 
-function TodayPointer({
-  instant,
-  moonthStart,
-  moonthEndExclusive,
-}: {
-  instant: Instant;
-  moonthStart: Instant;
-  moonthEndExclusive: Instant;
-}) {
-  const totalMs = epochMs(moonthEndExclusive) - epochMs(moonthStart);
-  const elapsedMs = epochMs(instant) - epochMs(moonthStart);
-  if (elapsedMs < 0 || elapsedMs > totalMs) return null;
-  const frac = elapsedMs / totalMs;
-  const angle = frac * 360;
-  const inner = polar(CENTER, CENTER, 36, angle);
-  const outer = polar(CENTER, CENTER, CARD_RING_RADIUS - CARD_SIZE / 2 - 6, angle);
+function SolarTodayPointer() {
+  // A small mark above the front of the moonth wheel, on the solar ring.
+  const onSolar = ellipsePoint(CENTER_X, CENTER_Y, SOLAR_RX, SOLAR_RY, 180);
   return (
-    <line
-      x1={inner.x}
-      y1={inner.y}
-      x2={outer.x}
-      y2={outer.y}
-      stroke="#d4a373"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      opacity={0.7}
-    />
+    <g>
+      <line
+        x1={onSolar.x}
+        y1={onSolar.y - 4}
+        x2={onSolar.x}
+        y2={onSolar.y - 20}
+        stroke="#d4a373"
+        strokeWidth={1.5}
+      />
+      <text
+        x={onSolar.x}
+        y={onSolar.y - 26}
+        textAnchor="middle"
+        fontSize="11"
+        fill="#d4a373"
+        fontFamily="ui-monospace, monospace"
+      >
+        now
+      </text>
+    </g>
   );
 }
 
-/* ----- helpers -------------------------------------------------------- */
+/* ----- helpers ------------------------------------------------------- */
 
 interface DayInfo {
   at: Instant;
   moonAngle: number;
   moonthDay: number;
   isToday: boolean;
+}
+
+/**
+ * Where on the moonth wheel does day `d` sit, given that day `focus`
+ * is at the bottom (angle 180°). Past days fan to the left (greater
+ * angles, since +angle in our convention goes 180° → 270° = bottom →
+ * left). Future days fan to the right.
+ *
+ * Cyclic wrap: relative is taken in (-14, 14] so the result is
+ * stable across moonth boundaries.
+ */
+function bottomCenteredAngle(d: number, focus: number): number {
+  let rel = d - focus;
+  // Wrap into (-14, 14].
+  while (rel > 14) rel -= DAYS_IN_MOONTH;
+  while (rel <= -14) rel += DAYS_IN_MOONTH;
+  // Future (rel > 0) goes right → decreasing angle from 180°.
+  return 180 - rel * (360 / DAYS_IN_MOONTH);
 }
 
 function midnightUtc(at: Instant): number {
@@ -287,49 +341,96 @@ function formatDate(at: Instant): string {
   return `${months[g.month - 1]} ${g.day}`;
 }
 
-function polar(cx: number, cy: number, r: number, degreesFromTop: number) {
+function ellipsePoint(cx: number, cy: number, rx: number, ry: number, degreesFromTop: number) {
   const rad = (degreesFromTop * Math.PI) / 180;
-  return { x: cx + r * Math.sin(rad), y: cy - r * Math.cos(rad) };
+  return { x: cx + rx * Math.sin(rad), y: cy - ry * Math.cos(rad) };
 }
 
-function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
-  const start = polar(cx, cy, r, startDeg);
-  const end = polar(cx, cy, r, endDeg);
+function describeEllipseFull(cx: number, cy: number, rx: number, ry: number): string {
+  return `M ${cx} ${cy - ry} A ${rx} ${ry} 0 1 1 ${cx - 0.001} ${cy - ry} Z`;
+}
+
+function describeEllipseArc(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  startDeg: number,
+  endDeg: number,
+): string {
+  const start = ellipsePoint(cx, cy, rx, ry, startDeg);
+  const end = ellipsePoint(cx, cy, rx, ry, endDeg);
   const sweep = endDeg - startDeg;
   const largeArc = Math.abs(sweep) > 180 ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+  const sweepFlag = sweep >= 0 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${rx} ${ry} 0 ${largeArc} ${sweepFlag} ${end.x} ${end.y}`;
 }
 
 /**
- * The visible solar arc range. We render ±90 days of solar arc centered
- * on the middle of the moonth, so several anchors usually show.
+ * For each solar anchor, compute the angle on the moonth/solar wheel
+ * (using the same bottom-centered convention) at which the anchor
+ * lies. Plus the start/end of the active moonth segment on that ring.
+ *
+ * The trick: both the moonth and the solar ring use the same angular
+ * convention. The moonth's "now" is at angle 180°. The solar
+ * anchors' angular positions on the solar ring are computed by
+ * mapping their solar-wheel angles relative to "now" — i.e., how far
+ * away (in days, then projected to the ring) is each anchor from
+ * today.
  */
-function computeSolarArc(moonthStart: Instant, moonthEnd: Instant): SolarArcInfo {
-  const midMs = (epochMs(moonthStart) + epochMs(moonthEnd)) / 2;
-  const mid = instantFromEpochMs(midMs);
-  const midSolarAngle = solarWheel.positionAt(mid);
+function computeSolarMarkers(moonthStart: Instant, moonthLastDay: Instant, now: Instant): SolarMarkersInfo {
+  // The solar ring represents the FULL year, with "now" at the
+  // bottom. An anchor's position on the ring = signed days from now,
+  // mapped to ±180°.
+  const dayMs = 86_400_000;
+  const yearDays = 365.2422;
 
-  const halfRangeDays = 90;
-  const dayDeg = 360 / 365.2422;
-  const rangeDeg = halfRangeDays * 2 * dayDeg;
-
-  // Find solar anchors whose absolute angular distance from mid is within ±rangeDeg/2.
-  const anchors: SolarArcInfo["anchors"] = [];
-  for (const anchor of solarWheel.anchors) {
-    // Signed angular distance from mid to anchor, in (-180, 180].
-    let d = anchor.angle - midSolarAngle;
-    d = ((d + 540) % 360) - 180;
-    if (Math.abs(d) > rangeDeg / 2) continue;
-    anchors.push({ id: anchor.id, angleOnArc: d, label: SOLAR_ANCHOR_SHORT[anchor.id] ?? anchor.name });
+  function angleForInstant(at: Instant): number {
+    const days = (epochMs(at) - epochMs(now)) / dayMs;
+    // Days ahead → right (angle decreases from 180°). Days behind →
+    // left (angle increases from 180°). Wrap into (-180, 180].
+    let signed = days;
+    // No wrap really needed since |days| < ~180 for the markers we plot
+    let angle = 180 - signed * (360 / yearDays);
+    // Normalize to [0, 360).
+    angle = ((angle % 360) + 360) % 360;
+    return angle;
   }
 
-  return { midDeg: midSolarAngle, rangeDeg, anchors };
+  // Find the next instance of each solar anchor in the +/-180 days window
+  // around `now`. Since solar anchors recur once a year, we use solarWheel.nextCrossing
+  // from a point 200 days in the past and accept the result if it falls within
+  // the window.
+  const windowStartMs = epochMs(now) - 200 * dayMs;
+  const windowEndMs = epochMs(now) + 200 * dayMs;
+  const start = instantFromEpochMs(windowStartMs);
+  const markers: SolarMarker[] = [];
+  for (const anchor of solarWheel.anchors) {
+    let cursor = start;
+    for (let i = 0; i < 3; i++) {
+      const next = solarWheel.nextCrossing(anchor.angle, cursor);
+      if (next === null) break;
+      const ms = epochMs(next);
+      if (ms > windowEndMs) break;
+      if (ms >= windowStartMs) {
+        markers.push({
+          id: `${anchor.id}-${ms}`,
+          label: SOLAR_ANCHOR_SHORT[anchor.id] ?? anchor.name,
+          ringAngle: angleForInstant(next),
+        });
+      }
+      cursor = next;
+    }
+  }
+
+  return {
+    markers,
+    moonthArcStartAngle: angleForInstant(moonthStart),
+    moonthArcEndAngle: angleForInstant(instantFromEpochMs(epochMs(moonthLastDay) + dayMs)),
+    moonthMidAngle: 180,
+  };
 }
 
-/**
- * Bucket user events into day-of-moonth slots by resolving each event
- * forward and checking which day it falls on within the window.
- */
 function groupEventsByDay(
   events: CalendarEvent[],
   moonthStart: Instant,
@@ -341,8 +442,6 @@ function groupEventsByDay(
 
   for (const event of events) {
     let cursor = moonthStart;
-    // A bounded loop — most events resolve to 0 or 1 occurrences in
-    // a 28-day window; 35 covers the worst-case daily wheel.
     for (let i = 0; i < 35; i++) {
       let resolved;
       try {
