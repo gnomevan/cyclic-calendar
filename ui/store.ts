@@ -137,6 +137,30 @@ export function addEvent(input: NewEventInput): CalendarEvent {
   return event;
 }
 
+/**
+ * Replace an existing event in place. Keeps the same id and userId so
+ * any references elsewhere stay valid. Returns the updated event, or
+ * null if no event with that id exists.
+ */
+export function updateEvent(id: string, input: NewEventInput): CalendarEvent | null {
+  const current = getSnapshot();
+  const idx = current.findIndex((e) => e.id === id);
+  if (idx === -1) return null;
+  const existing = current[idx]!;
+  const updated: CalendarEvent = {
+    id: existing.id,
+    userId: existing.userId ?? LOCAL_USER_ID,
+    name: input.name,
+    rule: input.rule,
+  };
+  if (input.description !== undefined) updated.description = input.description;
+  if (input.isOrigin) updated.isOrigin = true;
+  const next = [...current];
+  next[idx] = updated;
+  commit(next);
+  return updated;
+}
+
 export function removeEvent(id: string): void {
   commit(getSnapshot().filter((e) => e.id !== id));
 }

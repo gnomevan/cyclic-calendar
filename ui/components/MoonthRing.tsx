@@ -8,7 +8,7 @@ import {
   type CalendarEvent,
   type Instant,
 } from "../../src/index.js";
-import { DayCard, type DayCardVariant } from "./DayCard.js";
+import { DayCard, type DayCardVariant, type DayEventOccurrence } from "./DayCard.js";
 import { wheelRegistry } from "../wheels.js";
 
 /**
@@ -179,10 +179,10 @@ function groupEventsByDay(
   events: CalendarEvent[],
   moonthStart: Instant,
   moonthEndExclusive: Instant,
-): Map<number, CalendarEvent[]> {
+): Map<number, DayEventOccurrence[]> {
   const startMs = epochMs(moonthStart);
   const endMs = epochMs(moonthEndExclusive);
-  const result = new Map<number, CalendarEvent[]>();
+  const result = new Map<number, DayEventOccurrence[]>();
 
   for (const event of events) {
     let cursor = moonthStart;
@@ -200,12 +200,16 @@ function groupEventsByDay(
       const dayNum = dayIndex + 1;
       if (dayNum >= 1 && dayNum <= DAYS_IN_MOONTH) {
         const list = result.get(dayNum) ?? [];
-        list.push(event);
+        list.push({ event, at: resolved.at });
         result.set(dayNum, list);
       }
       if (ms <= epochMs(cursor)) break;
       cursor = instantFromEpochMs(ms + 1000);
     }
+  }
+  // Sort each day's occurrences by time.
+  for (const occurrences of result.values()) {
+    occurrences.sort((a, b) => epochMs(a.at) - epochMs(b.at));
   }
   return result;
 }

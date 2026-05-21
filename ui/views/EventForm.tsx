@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type AnchorRef,
   type PinningRule,
@@ -6,7 +6,7 @@ import {
 } from "../../src/index.js";
 import { AnchorPicker } from "../components/AnchorPicker.js";
 import { TimeRefPicker } from "../components/TimeRefPicker.js";
-import { addEvent } from "../store.js";
+import { addEvent, updateEvent, useEvents } from "../store.js";
 
 /**
  * Event creation form. The seven pinning-rule kinds map onto seven
@@ -48,12 +48,43 @@ interface RuleDraft {
   observationKey?: string;
 }
 
-export function EventForm() {
+interface EventFormProps {
+  /** If set, the form edits the event with this id rather than creating new. */
+  editingEventId: string | null;
+  /** Called to clear edit mode (after successful save, or when user cancels). */
+  onClearEdit: () => void;
+}
+
+export function EventForm({ editingEventId, onClearEdit }: EventFormProps) {
+  const events = useEvents();
+  const editingEvent = editingEventId
+    ? events.find((e) => e.id === editingEventId) ?? null
+    : null;
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isOrigin, setIsOrigin] = useState(false);
   const [draft, setDraft] = useState<RuleDraft>({ kind: "exact" });
   const [error, setError] = useState<string | null>(null);
+
+  // When the editing target changes (e.g., user clicks Edit on a list
+  // item), pull its fields into the form. When edit mode clears, reset
+  // the form back to empty.
+  useEffect(() => {
+    if (editingEvent) {
+      setName(editingEvent.name);
+      setDescription(editingEvent.description ?? "");
+      setIsOrigin(editingEvent.isOrigin ?? false);
+      setDraft(ruleToDraft(editingEvent.rule));
+      setError(null);
+    } else {
+      reset();
+    }
+    // We intentionally key only on the id so the user's in-flight edits
+    // are not clobbered every render when the events list reference
+    // changes for unrelated reasons.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingEventId]);
 
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -65,6 +96,10 @@ export function EventForm() {
     setIsOrigin(false);
     setDraft({ kind: "exact" });
     setError(null);
+  }
+
+  function handleCancel() {
+    onClearEdit();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -79,19 +114,27 @@ export function EventForm() {
       setError("Rule is incomplete — fill every field for the chosen kind.");
       return;
     }
-    addEvent({
+    const input = {
       name: name.trim(),
       ...(description.trim() && { description: description.trim() }),
       rule,
       ...(isOrigin && { isOrigin: true }),
-    });
+    };
+    if (editingEventId) {
+      updateEvent(editingEventId, input);
+    } else {
+      addEvent(input);
+    }
+    onClearEdit();
     reset();
   }
 
+  const isEditing = editingEventId !== null;
+
   return (
     <section className="wheel-card event-form">
-      <div className="wheel-kind">create</div>
-      <h2>New Event</h2>
+      <div className="wheel-kind">{isEditing ? "edit" : "create"}</div>
+      <h2>{isEditing ? "Edit event" : "New event"}</h2>
       <form onSubmit={handleSubmit}>
         <label>
           Name
@@ -140,7 +183,14 @@ export function EventForm() {
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit">Add event</button>
+        <div className="event-form-buttons">
+          <button type="submit">{isEditing ? "Update event" : "Add event"}</button>
+          {isEditing && (
+            <button type="button" className="event-form-cancel" onClick={handleCancel}>
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
     </section>
   );
@@ -388,5 +438,49 @@ function buildRule(draft: RuleDraft): PinningRule | null {
       return draft.wheelId && draft.observationKey
         ? { kind: "observed", wheelId: draft.wheelId, observationKey: draft.observationKey }
         : null;
+  }
+}
+
+/**
+ * Decompose a saved PinningRule back into draft fields so the form
+ * can edit an existing event. The form's draft has every possible
+ * field as optional; this picks the ones for the rule's kind and
+ * leaves the rest unset.
+ */
+function ruleToDraft(rule: PinningRule): RuleDraft {
+  switch (rule.kind) {
+    case "exact":
+      return { kind: "exact", anchor: rule.anchor };
+    case "firstAfter":
+      return { kind: "firstAfter", target: rule.target, after: rule.after };
+    case "nth":
+      return { kind: "nth", target: rule.target, n: rule.n, after: rule.after };
+    case "nearest":
+      return {
+        kind: "nearest",
+        target: rule.target,
+        near: rule.near,
+        toleranceDays: rule.toleranceDays,
+      };
+    case "conjunction":
+      return {
+        kind: "conjunction",
+        primary: rule.primary,
+        others: rule.others,
+        toleranceDays: rule.toleranceDays,
+      };
+    case "withinRange":
+      return {
+        kind: "withinRange",
+        target: rule.target,
+        start: rule.start,
+        end: rule.end,
+      };
+    case "observed":
+      return {
+        kind: "observed",
+        wheelId: rule.wheelId,
+        observationKey: rule.observationKey,
+      };
   }
 }

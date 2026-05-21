@@ -1,4 +1,5 @@
 import {
+  epochMs,
   toGregorianUTC,
   type CalendarEvent,
   type Instant,
@@ -7,23 +8,28 @@ import { MoonGlyph } from "./MoonGlyph.js";
 
 /**
  * DayCard — landscape day cell sized so that adjacent cards along the
- * front of the moonth ring sit flush against each other (no gap).
+ * front of the moonth ring sit flush against each other.
  *
- * Layout, top to bottom:
- *
- *   Row 1 (head):  [moon glyph]  [day-in-moonth]  [month / Gregorian-day stack]
- *   Row 2-4 (events): three event rows, each with a time tag and label.
- *
- * Width is fixed at 94 px so that, at the front of the wheel with
- * rx=420 and 28 cards uniformly spaced angularly, adjacent cards just
- * touch (chord spacing = rx · sin(360°/28) ≈ 93.5).
- *
- * Events are placeholder data ("first", "second", "third") for now —
- * the real events pipeline from the store will hook back in once the
- * card design is settled.
+ * Top row: moon glyph · day-in-moonth · stacked "MON / DD" Gregorian.
+ * Body: up to 3 real event occurrences for the day, with times in the
+ * user's local timezone. Empty days render no body rows so the card
+ * visibly says "nothing here." Days with more than 3 events get an
+ * "+N" indicator on the third line.
  */
 
 export type DayCardVariant = "focus" | "neighbor-near" | "neighbor-far";
+
+/**
+ * A resolved event occurrence for a specific day — the event itself
+ * plus the exact instant on which it falls. Sorted by `at` ascending
+ * before display.
+ */
+export interface DayEventOccurrence {
+  event: CalendarEvent;
+  at: Instant;
+}
+
+const MAX_VISIBLE_EVENTS = 3;
 
 interface DayCardProps {
   /** Day number within the moonth (1..28). */
@@ -34,36 +40,24 @@ interface DayCardProps {
   at: Instant;
   /** Whether this card is today. */
   isToday?: boolean;
-  /** Events for this day. Currently unused; placeholders are shown. */
-  events: CalendarEvent[];
-  /** Pixel width. Default 94 so cards bump at the front. */
+  /** Events for this day, with their resolved occurrence times. */
+  events: DayEventOccurrence[];
+  /** Pixel width. Default 105 — set so cards bump at the front. */
   width?: number;
   /** Color variant. */
   variant?: DayCardVariant;
 }
-
-interface DummyEvent {
-  time: string;
-  label: string;
-}
-
-const DUMMY_EVENTS: DummyEvent[] = [
-  { time: "08:00", label: "first" },
-  { time: "13:30", label: "second" },
-  { time: "18:00", label: "third" },
-];
 
 export function DayCard({
   moonthDay,
   moonAngle,
   at,
   isToday = false,
-  // events not used yet; placeholder data is rendered for now.
-  events: _events,
+  events,
   width = 105,
   variant = "focus",
 }: DayCardProps) {
-  // Golden-ratio portrait card: height = width × φ.
+  // Golden-ratio portrait card.
   const height = Math.round(width * 1.618);
   const g = toGregorianUTC(at);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -73,6 +67,9 @@ export function DayCard({
 
   const classes = ["day-card", `day-card-${variant}`];
   if (isToday) classes.push("day-card-today");
+
+  const visible = events.slice(0, MAX_VISIBLE_EVENTS);
+  const overflow = events.length - visible.length;
 
   return (
     <div className={classes.join(" ")} style={{ width, height }}>
@@ -84,14 +81,29 @@ export function DayCard({
           <span className="day-card-greg-day">{greDay}</span>
         </div>
       </div>
-      <ul className="day-card-events">
-        {DUMMY_EVENTS.map((e) => (
-          <li key={e.label}>
-            <time>{e.time}</time>
-            <span>{e.label}</span>
-          </li>
-        ))}
-      </ul>
+      {events.length === 0 ? (
+        <div className="day-card-empty" aria-hidden="true" />
+      ) : (
+        <ul className="day-card-events">
+          {visible.map(({ event, at: occurrenceAt }) => (
+            <li key={event.id} title={event.description ?? event.name}>
+              <time>{formatTime(occurrenceAt)}</time>
+              <span className="day-card-event-name">{event.name}</span>
+            </li>
+          ))}
+          {overflow > 0 && (
+            <li className="day-card-overflow">+{overflow} more</li>
+          )}
+        </ul>
+      )}
     </div>
   );
+}
+
+function formatTime(at: Instant): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(epochMs(at)));
 }

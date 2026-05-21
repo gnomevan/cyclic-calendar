@@ -12,12 +12,19 @@ import { removeEvent, useEvents } from "../store.js";
 import { wheelRegistry } from "../wheels.js";
 
 /**
- * List of created events with each event's next resolved occurrence
- * and a remove button. Re-resolves once an hour to keep "next occurrence"
- * honest as time passes.
+ * List of created events with each event's next resolved occurrence,
+ * plus Edit and Remove buttons. Editing routes through the parent
+ * component (App), which sets the editingEventId state that the form
+ * reads. Re-resolves once an hour to keep "next occurrence" honest as
+ * time passes.
  */
 
-export function EventList() {
+interface EventListProps {
+  editingEventId: string | null;
+  onEdit: (id: string) => void;
+}
+
+export function EventList({ editingEventId, onEdit }: EventListProps) {
   const events = useEvents();
   const [from, setFrom] = useState<Instant>(() => now());
 
@@ -45,7 +52,13 @@ export function EventList() {
       <h2>Events</h2>
       <ul>
         {events.map((event) => (
-          <EventRow key={event.id} event={event} from={from} />
+          <EventRow
+            key={event.id}
+            event={event}
+            from={from}
+            isEditing={editingEventId === event.id}
+            onEdit={onEdit}
+          />
         ))}
       </ul>
     </section>
@@ -55,9 +68,11 @@ export function EventList() {
 interface EventRowProps {
   event: CalendarEvent;
   from: Instant;
+  isEditing: boolean;
+  onEdit: (id: string) => void;
 }
 
-function EventRow({ event, from }: EventRowProps) {
+function EventRow({ event, from, isEditing, onEdit }: EventRowProps) {
   const nextAt = useMemo(() => {
     try {
       return resolve(event.rule, { registry: wheelRegistry, from })?.at ?? null;
@@ -67,16 +82,21 @@ function EventRow({ event, from }: EventRowProps) {
   }, [event.rule, from]);
 
   return (
-    <li>
+    <li className={isEditing ? "event-row-editing" : ""}>
       <div className="event-row-main">
         <div>
           <div className="event-name">{event.name}</div>
           <div className="event-kind">{describeRule(event.rule)}</div>
           {event.description && <div className="event-desc">{event.description}</div>}
         </div>
-        <button type="button" className="remove" onClick={() => removeEvent(event.id)}>
-          remove
-        </button>
+        <div className="event-row-actions">
+          <button type="button" className="edit" onClick={() => onEdit(event.id)}>
+            edit
+          </button>
+          <button type="button" className="remove" onClick={() => removeEvent(event.id)}>
+            remove
+          </button>
+        </div>
       </div>
       <div className="event-next">
         Next: {nextAt ? formatGregorian(nextAt) : "no occurrence in the foreseeable window"}

@@ -418,6 +418,57 @@ main {
   border-color: #4a2520;
 }
 
+.event-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
+
+.event-list .edit {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.25rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.event-list .edit:hover {
+  color: var(--accent);
+  border-color: #3a342c;
+}
+
+.event-row-editing {
+  background: rgba(212, 163, 115, 0.05);
+  border-left: 2px solid var(--accent);
+  margin-left: -2px;
+  padding-left: 0.5rem;
+}
+
+.event-form-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.event-form-cancel {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.event-form-cancel:hover {
+  color: var(--fg);
+  border-color: var(--fg-dim);
+}
+
 /* ----- Moonth view ----- */
 .moonth-view {
   background: var(--card);
@@ -668,9 +719,21 @@ main {
   flex: 0 0 auto;
 }
 
+.day-card-event-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
 .day-card-events .day-card-overflow {
   color: var(--fg-dim);
   font-style: italic;
+}
+
+.day-card-empty {
+  flex: 1;
 }
 
 @media (max-width: 700px) {
