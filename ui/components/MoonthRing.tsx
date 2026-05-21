@@ -27,7 +27,7 @@ import { wheelRegistry } from "../wheels.js";
 
 export const DAYS_IN_MOONTH = 28;
 export const RING_RX = 420;
-export const RING_RY = 100;
+export const RING_RY = 65;
 export const CARD_WIDTH = 72;
 export const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.55);
 const SCALE_MIN = 0.42;

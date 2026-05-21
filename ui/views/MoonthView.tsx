@@ -35,15 +35,21 @@ import { useEvents } from "../store.js";
  * year-spine connecting the rings.
  */
 
-// Stack: ring centers spaced ~290 px apart so cards don't collide
-// between rings. CARD_HEIGHT/2 above the top card and below the
-// bottom card determines the safe vertical gap.
-const RING_SPACING = 300;
+// Stack: ring centers spaced so cards don't collide between rings.
+// With ry=65 (flatter) and neighbor scaling, ~240 between centers is
+// comfortable.
+const RING_SPACING = 240;
 const RINGS_BEFORE = 2;
 const RINGS_AFTER = 2;
 
+// Stack-perspective scales: focus ring full size, neighbors smaller
+// as they recede into the stack.
+const SCALE_FOCUS = 1.0;
+const SCALE_NEIGHBOR_NEAR = 0.85;
+const SCALE_NEIGHBOR_FAR = 0.7;
+
 const RING_WIDTH = 960;
-const RING_HEIGHT = RING_RY * 2 + 80; // a touch of headroom for card half-heights
+const RING_HEIGHT = RING_RY * 2 + 80; // headroom for card half-heights
 
 // Solar year track height matches the total ring-stack height plus
 // the half-card extents on top and bottom.
@@ -114,7 +120,11 @@ export function MoonthView() {
               offset === 0 ? "focus" :
               Math.abs(offset) === 1 ? "neighbor-near" :
               "neighbor-far";
-            // Position the ring vertically. ring 0 sits in the
+            const stackScale =
+              variant === "focus" ? SCALE_FOCUS :
+              variant === "neighbor-near" ? SCALE_NEIGHBOR_NEAR :
+              SCALE_NEIGHBOR_FAR;
+            // Position the ring vertically. Ring 0 sits in the
             // middle; offsets above are higher on the page.
             const centerOffsetPx = offset * RING_SPACING;
             const stackCenterY = STACK_HEIGHT / 2;
@@ -126,7 +136,14 @@ export function MoonthView() {
               <div
                 key={offset}
                 className="moonth-ring-slot"
-                style={{ top: ringTop, left: 0, width: RING_WIDTH, height: RING_HEIGHT }}
+                style={{
+                  top: ringTop,
+                  left: 0,
+                  width: RING_WIDTH,
+                  height: RING_HEIGHT,
+                  transform: `scale(${stackScale})`,
+                  transformOrigin: "center center",
+                }}
               >
                 <div className="moonth-ring-label">
                   <span className="moonth-ring-offset">

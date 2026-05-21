@@ -462,6 +462,7 @@ main {
 
 .moonth-ring-slot {
   position: absolute;
+  transition: transform 0.35s ease;
 }
 
 .moonth-ring-label {
