@@ -60,10 +60,11 @@ export function DayCard({
   isToday = false,
   // events not used yet; placeholder data is rendered for now.
   events: _events,
-  width = 94,
+  width = 105,
   variant = "focus",
 }: DayCardProps) {
-  const height = 72;
+  // Golden-ratio portrait card: height = width × φ.
+  const height = Math.round(width * 1.618);
   const g = toGregorianUTC(at);
   const pad = (n: number) => String(n).padStart(2, "0");
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

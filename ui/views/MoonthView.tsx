@@ -35,13 +35,9 @@ import { useEvents } from "../store.js";
  * year-spine connecting the rings.
  */
 
-// Stack: ring centers spaced so cards don't collide between rings.
-// With golden-ratio cards (170 tall) and the gentle neighbor scaling
-// curve, 260 between centers keeps a clear gap at the focus↔near
-// transition.
-const RING_SPACING = 260;
 const RINGS_BEFORE = 2;
 const RINGS_AFTER = 2;
+const STACK_TOTAL_RINGS = RINGS_BEFORE + 1 + RINGS_AFTER;
 
 // Stack-perspective scales. Linear −0.08 per step from focus, so the
 // scaling is consistent with imagining 13 rings around a torus's
@@ -51,22 +47,72 @@ const SCALE_FOCUS = 1.0;
 const SCALE_NEIGHBOR_NEAR = 0.92;
 const SCALE_NEIGHBOR_FAR = 0.84;
 
+const PERSPECTIVE_BACK_SCALE = 0.42; // matches SCALE_MIN inside MoonthRing
+
+// The visual top of a ring at the back (angle 0°), measured from
+// the ring's center, accounting for both the ring radius and the
+// back card's perspective scale.
+const RING_BACK_EXTENT =
+  RING_RY + (CARD_HEIGHT * PERSPECTIVE_BACK_SCALE) / 2;
+// The visual bottom of a ring at the front (angle 180°).
+const RING_FRONT_EXTENT = RING_RY + CARD_HEIGHT / 2;
+
+function scaleForOffset(offset: number): number {
+  if (offset === 0) return SCALE_FOCUS;
+  if (Math.abs(offset) === 1) return SCALE_NEIGHBOR_NEAR;
+  return SCALE_NEIGHBOR_FAR;
+}
+
+/**
+ * Distance between the centers of two adjacent rings such that the
+ * upper ring's front-bottom touches the lower ring's back-top with no
+ * gap or overlap. Both scales need to be accounted for: front extent
+ * scales by the upper ring's slot scale, back extent by the lower
+ * ring's slot scale.
+ */
+function spacingBetween(upperScale: number, lowerScale: number): number {
+  return RING_FRONT_EXTENT * upperScale + RING_BACK_EXTENT * lowerScale;
+}
+
+/** Cumulative center-y offset from the focus ring. */
+function ringCenterOffset(offset: number): number {
+  if (offset === 0) return 0;
+  const dir = Math.sign(offset);
+  let cumulative = 0;
+  for (let i = 0; i < Math.abs(offset); i++) {
+    cumulative += spacingBetween(
+      scaleForOffset(dir * i),
+      scaleForOffset(dir * (i + 1)),
+    );
+  }
+  return dir * cumulative;
+}
+
+// Pre-compute the ring layout once. STACK_HEIGHT is the actual extent
+// from the topmost back-top to the bottommost front-bottom.
+const RING_OFFSETS = Array.from(
+  { length: STACK_TOTAL_RINGS },
+  (_, i) => i - RINGS_BEFORE,
+);
+const RING_CENTERS_REL = RING_OFFSETS.map((o) => ringCenterOffset(o));
+const TOP_EDGE =
+  RING_CENTERS_REL[0]! -
+  RING_BACK_EXTENT * scaleForOffset(RING_OFFSETS[0]!);
+const BOTTOM_EDGE =
+  RING_CENTERS_REL[RING_CENTERS_REL.length - 1]! +
+  RING_FRONT_EXTENT * scaleForOffset(RING_OFFSETS[RING_OFFSETS.length - 1]!);
+const STACK_HEIGHT = BOTTOM_EDGE - TOP_EDGE;
+const FOCUS_STACK_Y = -TOP_EDGE; // ring-0 center, in stack coordinates
+
 // Canvas wide enough to fit the wheel — side cards at x = ±RX, plus
 // half a card width of overhang on each side.
 const RING_WIDTH = 1060;
 const RING_HEIGHT = RING_RY * 2 + 100; // headroom for the taller cards
 
-// Solar year track height matches the total ring-stack height plus
-// the half-card extents on top and bottom.
-const STACK_TOTAL_RINGS = RINGS_BEFORE + 1 + RINGS_AFTER;
-const STACK_HEIGHT =
-  (STACK_TOTAL_RINGS - 1) * RING_SPACING + // spacing between centers
-  RING_RY * 2 +                            // top and bottom ring's vertical extent
-  CARD_HEIGHT;                             // card extents beyond the ring edges
-
-// The solar track shows ±(RINGS_BEFORE/AFTER moonths) of context.
-// 28 days per ring at RING_SPACING pixels each → pxPerDay = RING_SPACING/28.
-const PX_PER_DAY = RING_SPACING / 28;
+// Solar year track shows enough of the year to cover roughly the
+// rings on display. We approximate the px-per-day from the
+// focus↔neighbor spacing (the average is similar for nearby pairs).
+const PX_PER_DAY = spacingBetween(SCALE_FOCUS, SCALE_NEIGHBOR_NEAR) / 28;
 const TRACK_HALF_RANGE_DAYS = Math.max(RINGS_BEFORE, RINGS_AFTER) * 28 + 14;
 
 export function MoonthView() {
@@ -90,11 +136,8 @@ export function MoonthView() {
     return Math.max(1, Math.min(28, dayIndex + 1));
   }, [nowInstant, currentMoonthStart]);
 
-  // Build the array of ring offsets: -RINGS_BEFORE .. +RINGS_AFTER.
-  const ringOffsets = useMemo(
-    () => Array.from({ length: STACK_TOTAL_RINGS }, (_, i) => i - RINGS_BEFORE),
-    [],
-  );
+  // Use the module-level RING_OFFSETS so we don't recompute per render.
+  const ringOffsets = RING_OFFSETS;
 
   return (
     <section className="moonth-view">
@@ -125,15 +168,12 @@ export function MoonthView() {
               offset === 0 ? "focus" :
               Math.abs(offset) === 1 ? "neighbor-near" :
               "neighbor-far";
-            const stackScale =
-              variant === "focus" ? SCALE_FOCUS :
-              variant === "neighbor-near" ? SCALE_NEIGHBOR_NEAR :
-              SCALE_NEIGHBOR_FAR;
-            // Position the ring vertically. Ring 0 sits in the
-            // middle; offsets above are higher on the page.
-            const centerOffsetPx = offset * RING_SPACING;
-            const stackCenterY = STACK_HEIGHT / 2;
-            const ringTop = stackCenterY + centerOffsetPx - RING_HEIGHT / 2;
+            const stackScale = scaleForOffset(offset);
+            // Variable spacing: ring center positions are precomputed
+            // so adjacent rings exactly touch (no gap, no overlap)
+            // regardless of which scales are at the boundary.
+            const ringCenterY = FOCUS_STACK_Y + ringCenterOffset(offset);
+            const ringTop = ringCenterY - RING_HEIGHT / 2;
             const moonthEndExclusive = instantFromEpochMs(
               epochMs(moonthStart) + 28 * 86_400_000,
             );
