@@ -178,12 +178,21 @@ function midnightUtc(at: Instant): number {
 function groupEventsByDay(
   events: CalendarEvent[],
   moonthStart: Instant,
-  moonthEndExclusive: Instant,
+  _moonthEndExclusive: Instant,
 ): Map<number, DayEventOccurrence[]> {
-  const startMs = epochMs(moonthStart);
-  const endMs = epochMs(moonthEndExclusive);
+  // Align bucket boundaries to UTC midnight of the moonth-start's day.
+  // The day cards each represent noon UTC of one of those calendar
+  // days; if we bucket by the new-moon *instant* instead, events drift
+  // onto the previous card whenever the new moon happens after
+  // midnight (which is most of the time). Aligning to midnight keeps
+  // the buckets in lockstep with what the cards display.
+  const startMs = midnightUtc(moonthStart);
+  const endMs = startMs + DAYS_IN_MOONTH * 86_400_000;
   const result = new Map<number, DayEventOccurrence[]>();
 
+  // The resolver should still walk from the actual new-moon instant
+  // so that lunar/solar phase searches start from a meaningful point;
+  // only the bucket math uses the midnight alignment.
   for (const event of events) {
     let cursor = moonthStart;
     for (let i = 0; i < 35; i++) {

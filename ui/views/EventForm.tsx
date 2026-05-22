@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  fromGregorianUTC,
   lunarWheel,
+  now,
+  resolve,
   solarWheel,
   toGregorianUTC,
   type AnchorRef,
@@ -18,6 +21,7 @@ import {
   useEditingEventId,
 } from "../editing.js";
 import { addEvent, updateEvent, useEvents } from "../store.js";
+import { wheelRegistry } from "../wheels.js";
 
 /**
  * Event creation form. Two modes:
@@ -96,7 +100,6 @@ export function EventForm() {
     : null;
 
   const isEditing = editingEventId !== null;
-  const isSimpleCreate = creatingFromDay !== null;
 
   const formRef = useRef<HTMLElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -108,21 +111,43 @@ export function EventForm() {
   const [attachments, setAttachments] = useState<AttachmentChecks>(DEFAULT_ATTACHMENTS);
   const [error, setError] = useState<string | null>(null);
 
-  // Pre-computed cycle positions for the simple-create mode.
-  const dayCycles = useMemo(() => {
-    if (creatingFromDay === null) return null;
-    return computeDayCycles(creatingFromDay);
-  }, [creatingFromDay]);
+  // Decide whether the form should show the simple checkbox UI or the
+  // advanced kind picker. Simple mode kicks in when:
+  //   - the user clicked an empty day to create (creatingFromDay set)
+  //   - they're editing an event whose rule matches the click-from-day
+  //     shape (atAngle on lunar/solar and/or gregorianDate, optionally
+  //     wrapped in anyOf)
+  const simpleSnapshot = useMemo(() => {
+    if (editingEvent) {
+      return extractSimpleShape(editingEvent.rule);
+    }
+    if (creatingFromDay) {
+      return {
+        attachments: DEFAULT_ATTACHMENTS,
+        dayCycles: computeDayCycles(creatingFromDay),
+      };
+    }
+    return null;
+  }, [editingEvent, creatingFromDay]);
 
-  // When the editing target changes (user clicks an event on a card),
-  // pull its fields into the form and scroll into view. When edit
-  // mode clears, reset.
+  const isSimpleMode = simpleSnapshot !== null;
+  const dayCycles = simpleSnapshot?.dayCycles ?? null;
+
+  // When the editing target changes, pull fields into the form. If the
+  // rule matches the simple shape, populate attachments; otherwise
+  // populate the advanced draft.
   useEffect(() => {
     if (editingEvent) {
       setName(editingEvent.name);
       setDescription(editingEvent.description ?? "");
       setIsOrigin(editingEvent.isOrigin ?? false);
-      setDraft(ruleToDraft(editingEvent.rule));
+      const simple = extractSimpleShape(editingEvent.rule);
+      if (simple) {
+        setAttachments(simple.attachments);
+        setDraft({ kind: "exact" }); // advanced draft idle
+      } else {
+        setDraft(ruleToDraft(editingEvent.rule));
+      }
       setError(null);
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       window.setTimeout(() => nameRef.current?.focus(), 350);
@@ -132,8 +157,8 @@ export function EventForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingEventId]);
 
-  // When click-from-day creation starts, reset the form to defaults
-  // and scroll/focus.
+  // When click-from-day creation starts, reset the form and seed
+  // attachments to all-checked.
   useEffect(() => {
     if (creatingFromDay) {
       reset();
@@ -170,7 +195,7 @@ export function EventForm() {
     }
 
     let rule: PinningRule | null;
-    if (isSimpleCreate && dayCycles) {
+    if (isSimpleMode && dayCycles) {
       rule = buildAttachmentRule(attachments, dayCycles);
       if (!rule) {
         setError("Pick at least one cycle to attach the event to.");
@@ -199,12 +224,12 @@ export function EventForm() {
     reset();
   }
 
-  const headingKind = isEditing ? "edit" : isSimpleCreate ? "new on day" : "create";
-  const headingTitle = isEditing
-    ? "Edit event"
-    : isSimpleCreate
-    ? "New event"
-    : "New event";
+  const headingKind = isEditing
+    ? "edit"
+    : creatingFromDay
+    ? "new on day"
+    : "create";
+  const headingTitle = isEditing ? "Edit event" : "New event";
 
   return (
     <section ref={formRef} className="wheel-card event-form">
@@ -241,7 +266,7 @@ export function EventForm() {
           Treat as origin (this event can anchor counts)
         </label>
 
-        {isSimpleCreate && dayCycles ? (
+        {isSimpleMode && dayCycles ? (
           <AttachmentChecklist
             cycles={dayCycles}
             attachments={attachments}
@@ -273,7 +298,7 @@ export function EventForm() {
           <button type="submit">
             {isEditing ? "Update event" : "Add event"}
           </button>
-          {(isEditing || isSimpleCreate) && (
+          {(isEditing || creatingFromDay) && (
             <button type="button" className="event-form-cancel" onClick={handleCancel}>
               Cancel
             </button>
@@ -690,6 +715,78 @@ function computeDayCycles(at: Instant): DayCycles {
     month: g.month,
     day: g.day,
   };
+}
+
+/**
+ * Recognize the click-from-day rule shape: a (possibly anyOf-wrapped)
+ * collection of atAngle-on-lunar, atAngle-on-solar, and/or
+ * gregorianDate rules. Returns the implied attachments and a
+ * representative DayCycles, or null if the rule isn't this shape.
+ *
+ * Missing cycle values (e.g. solarAngle when the rule has only a
+ * lunar attachment) are computed from a reference instant — either
+ * noon UTC on the gregorianDate this year, or the first resolution
+ * of the rule from now. That way checking a previously-unchecked
+ * attachment gives a sensible default value.
+ */
+function extractSimpleShape(rule: PinningRule): {
+  attachments: AttachmentChecks;
+  dayCycles: DayCycles;
+} | null {
+  const inner: PinningRule[] = rule.kind === "anyOf" ? rule.rules : [rule];
+
+  let lunar: { angle: number } | null = null;
+  let solar: { angle: number } | null = null;
+  let gregorian: { month: number; day: number } | null = null;
+
+  for (const r of inner) {
+    if (r.kind === "atAngle" && r.wheelId === "lunar") lunar = { angle: r.angle };
+    else if (r.kind === "atAngle" && r.wheelId === "solar") solar = { angle: r.angle };
+    else if (r.kind === "gregorianDate") gregorian = { month: r.month, day: r.day };
+    else return null; // anything else means this isn't the simple shape
+  }
+
+  if (!lunar && !solar && !gregorian) return null;
+
+  // Pick a representative instant to fill in missing cycle values.
+  const ref = deriveReferenceInstant(rule, gregorian);
+  const base = computeDayCycles(ref);
+
+  return {
+    attachments: {
+      lunar: lunar !== null,
+      solar: solar !== null,
+      gregorian: gregorian !== null,
+    },
+    dayCycles: {
+      lunarAngle: lunar?.angle ?? base.lunarAngle,
+      solarAngle: solar?.angle ?? base.solarAngle,
+      month: gregorian?.month ?? base.month,
+      day: gregorian?.day ?? base.day,
+    },
+  };
+}
+
+function deriveReferenceInstant(
+  rule: PinningRule,
+  gregorian: { month: number; day: number } | null,
+): Instant {
+  // Prefer the gregorian-date noon if available — it's a stable
+  // reference that doesn't depend on when "now" is.
+  if (gregorian) {
+    const todayG = toGregorianUTC(now());
+    return fromGregorianUTC({
+      year: todayG.year,
+      month: gregorian.month,
+      day: gregorian.day,
+      hour: 12,
+      minute: 0,
+      second: 0,
+    });
+  }
+  // Otherwise resolve the rule from now and use the first occurrence.
+  const r = resolve(rule, { registry: wheelRegistry, from: now() });
+  return r?.at ?? now();
 }
 
 function buildAttachmentRule(
