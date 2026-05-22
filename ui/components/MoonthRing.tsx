@@ -41,8 +41,19 @@ export interface MoonthRingProps {
   moonthStart: Instant;
   /** Moonth's offset from today's moonth. 0 = current. Negative = past. */
   moonthOffset: number;
-  /** Day-of-moonth (1..28) to place at the bottom-center of the ring. */
+  /**
+   * Animated day-of-moonth used for card *positions* on the wheel.
+   * May be fractional during a rotation animation.
+   */
   focusDay: number;
+  /**
+   * Target day-of-moonth that the user clicked. Used for the focus
+   * indicator (border) only — snaps immediately on click while
+   * `focusDay` interpolates over the rotation duration. The focus
+   * ring appears on the clicked card at t=0; cards then rotate to
+   * bring it to the bottom.
+   */
+  targetDay: number;
   /**
    * If this ring contains today, the day-of-moonth that today is.
    * null otherwise. Used so the "today" glow can travel between rings
@@ -63,6 +74,7 @@ export function MoonthRing({
   moonthStart,
   moonthOffset,
   focusDay,
+  targetDay,
   todayMoonthDay,
   variant,
   events,
@@ -140,7 +152,10 @@ export function MoonthRing({
 
       <div className="moonth-ring-cards">
         {placed.map(({ day, x, y, scale, opacity }) => {
-          const isFocus = variant === "focus" && day.moonthDay === focusDay;
+          // isFocus tracks the *target* day, not the animated one, so
+          // the focus border snaps to the clicked card immediately
+          // even while the rotation is still in flight.
+          const isFocus = variant === "focus" && day.moonthDay === targetDay;
           const isToday =
             todayMoonthDay !== null && day.moonthDay === todayMoonthDay;
           return (

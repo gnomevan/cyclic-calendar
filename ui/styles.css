@@ -657,24 +657,31 @@ main {
   background: #0a0d12;
 }
 
-/* Focused card — the one rotated to the bottom-center. Warm accent
-   border so the user always knows which day is currently selected. */
+/* Focused card — the one rotated to the bottom-center (the user's
+   current selection). Warm accent border on the card itself. */
 .day-card-focused {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 1px var(--accent);
 }
 
-/* Today's card — independent of focus. Soft glow outline that
-   travels with today as the user navigates. When today is also the
-   focused card, the focused border layers on top. */
+/* Today's card — independent of focus. Cool-blue outline halo that
+   matches the "now" marker on the solar year track, so the same
+   color always means "the current moment" throughout the UI. The
+   outline sits OUTSIDE the card border (offset 2px) so it reads as a
+   distinct halo, not as part of the card edge. */
 .day-card-today {
-  box-shadow: 0 0 0 1px rgba(212, 163, 115, 0.55),
-              0 0 18px rgba(212, 163, 115, 0.35);
+  outline: 1.5px solid #9fc7e8;
+  outline-offset: 2px;
+  box-shadow: 0 0 16px rgba(159, 199, 232, 0.4);
 }
 
+/* When the user is focused on today, both layer cleanly: warm border
+   on the card, blue halo around it. */
 .day-card-today.day-card-focused {
+  outline: 1.5px solid #9fc7e8;
+  outline-offset: 2px;
   box-shadow: 0 0 0 1px var(--accent),
-              0 0 18px rgba(212, 163, 115, 0.45);
+              0 0 16px rgba(159, 199, 232, 0.45);
 }
 
 .day-card-head {

@@ -255,6 +255,7 @@ export function MoonthView() {
                   moonthStart={moonthStart}
                   moonthOffset={absoluteOffset}
                   focusDay={focusedDay}
+                  targetDay={targetDay}
                   todayMoonthDay={todayInThisRing}
                   variant={variant}
                   events={events}
