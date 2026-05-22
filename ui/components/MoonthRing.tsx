@@ -63,9 +63,15 @@ export function MoonthRing({
   const centerY = height / 2;
 
   const days = useMemo<DayInfo[]>(() => {
-    const startNoonMs = midnightUtc(moonthStart) + 12 * 60 * 60 * 1000;
+    // Day N's card represents the 24-hour window starting at the new
+    // moon plus (N−1)*24h. The card's `at` is the midpoint of that
+    // window — moonthStart + (N − 0.5) days. Counting from the new
+    // moon instant (not from UTC midnight) keeps day numbers in
+    // lockstep with the lunar cycle: the same lunar angle always
+    // falls on the same day-of-moonth across cycles.
+    const startMs = epochMs(moonthStart);
     return Array.from({ length: DAYS_IN_MOONTH }, (_, i) => {
-      const at = instantFromEpochMs(startNoonMs + i * 86_400_000);
+      const at = instantFromEpochMs(startMs + (i + 0.5) * 86_400_000);
       return {
         at,
         moonAngle: lunarWheel.positionAt(at),
@@ -170,29 +176,21 @@ function bottomCenteredAngle(d: number, focus: number): number {
   return 180 - rel * (360 / DAYS_IN_MOONTH);
 }
 
-function midnightUtc(at: Instant): number {
-  const ms = epochMs(at);
-  return ms - (ms % 86_400_000);
-}
-
 function groupEventsByDay(
   events: CalendarEvent[],
   moonthStart: Instant,
   _moonthEndExclusive: Instant,
 ): Map<number, DayEventOccurrence[]> {
-  // Align bucket boundaries to UTC midnight of the moonth-start's day.
-  // The day cards each represent noon UTC of one of those calendar
-  // days; if we bucket by the new-moon *instant* instead, events drift
-  // onto the previous card whenever the new moon happens after
-  // midnight (which is most of the time). Aligning to midnight keeps
-  // the buckets in lockstep with what the cards display.
-  const startMs = midnightUtc(moonthStart);
+  // Bucket boundaries are aligned to the new-moon instant, not UTC
+  // midnight. Day N = the 24-hour window [moonthStart + (N−1)·24h,
+  // moonthStart + N·24h). This keeps the day-of-moonth numbering in
+  // lockstep with the lunar cycle: the same lunar phase angle always
+  // lands on the same day-of-moonth across cycles, regardless of what
+  // time-of-day the new moon happened.
+  const startMs = epochMs(moonthStart);
   const endMs = startMs + DAYS_IN_MOONTH * 86_400_000;
   const result = new Map<number, DayEventOccurrence[]>();
 
-  // The resolver should still walk from the actual new-moon instant
-  // so that lunar/solar phase searches start from a meaningful point;
-  // only the bucket math uses the midnight alignment.
   for (const event of events) {
     let cursor = moonthStart;
     for (let i = 0; i < 35; i++) {
