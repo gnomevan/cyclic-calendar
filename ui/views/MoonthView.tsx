@@ -2,119 +2,66 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   epochMs,
   instantFromEpochMs,
+  lunarSiderealWheel,
+  lunarWheel,
   now,
+  normalizeAngle,
+  resolve,
+  toGregorianUTC,
+  type CalendarEvent,
   type Instant,
 } from "../../src/index.js";
-import {
-  MoonthRing,
-  RING_RX,
-  RING_RY,
-  CARD_HEIGHT,
-  moonthStartFromOffset,
-  formatShort,
-} from "../components/MoonthRing.js";
-import { SolarYearTrack } from "../components/SolarYearTrack.js";
+import { DayCard, type DayEventOccurrence } from "../components/DayCard.js";
 import { findRecentNewMoon } from "../components/ConcentricOverview.js";
+import { SolarYearTrack } from "../components/SolarYearTrack.js";
 import { ensureFocus, useFocus } from "../focus.js";
 import { useEvents } from "../store.js";
+import { wheelRegistry } from "../wheels.js";
 
 /**
- * MoonthView — five stacked moonth rings, viewed as a torus laid on
- * its side.
+ * MoonthView — the continuous helix of cards.
  *
- * Each ring is a flattened ellipse (rx=420, ry=100) — the perspective
- * tilt is steep enough that adjacent moonth rings can stack without
- * cards overlapping between them, but gentle enough that the front
- * and back of each individual ring read as the same ring. The
- * focused (current) ring sits in the middle of the stack with warm
- * accent coloring; the two rings above (past) and two below (future)
- * are cool-toned and partially transparent.
+ * No discrete rings. Every card is on one continuous spiral whose
+ * angular axis is the moon's sidereal longitude and whose vertical
+ * axis is time. As the user moves through the year, the helix winds
+ * downward; one full turn corresponds to one sidereal lunar cycle
+ * (~27.32 days). Five turns are visible at once, with the focused
+ * day at the front-bottom of the central turn.
  *
- * Vertically, each ring's bottom-card date aligns with the
- * corresponding mark on the solar year track on the left. Ring
- * spacing in pixels = 28 days on the track, so the track is a true
- * year-spine connecting the rings.
+ * Card positions are derived directly from the moon's *actual*
+ * sidereal longitude at each card's instant — so the same lunar
+ * phase position always sits at the same angular position on the
+ * spiral, and cycle-to-cycle drift relative to the sun-zodiac year
+ * track is what naturally appears.
+ *
+ * The solar year track stays on the left as a separate strip, with
+ * the same vertical span as the helix so anchors and zodiac labels
+ * align horizontally with the corresponding helix moments.
+ *
+ * Animation: when the user clicks a card, the focus instant is
+ * interpolated in JS over 900 ms (ease-in-out cubic). Card positions
+ * re-derive each frame, so every card traces the rim continuously.
  */
 
-const RINGS_BEFORE = 2;
-const RINGS_AFTER = 2;
-const STACK_TOTAL_RINGS = RINGS_BEFORE + 1 + RINGS_AFTER;
+const VISIBLE_HALF_DAYS = 68; // ~2.5 sidereal cycles each side; 5 visible total
+const SIDEREAL_CYCLE_DAYS = 27.32;
+const VERTICAL_PER_DAY = 8; // px per day vertically along the spiral
 
-// Stack-perspective scales. Linear −0.08 per step from focus, so the
-// scaling is consistent with imagining 13 rings around a torus's
-// solar circumference — the visible 5 are gentle slices of that
-// larger geometry, not a steep drop at the edges.
-const SCALE_FOCUS = 1.0;
-const SCALE_NEIGHBOR_NEAR = 0.92;
-const SCALE_NEIGHBOR_FAR = 0.84;
+const RX = 420;
+const RY = 65;
+const CARD_WIDTH = 105;
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
-const PERSPECTIVE_BACK_SCALE = 0.42; // matches SCALE_MIN inside MoonthRing
+const SCALE_MIN = 0.42;
+const OPACITY_MIN = 0.32;
+const VERTICAL_SCALE_PER_CYCLE = 0.08;
 
-// The visual top of a ring at the back (angle 0°), measured from
-// the ring's center, accounting for both the ring radius and the
-// back card's perspective scale.
-const RING_BACK_EXTENT =
-  RING_RY + (CARD_HEIGHT * PERSPECTIVE_BACK_SCALE) / 2;
-// The visual bottom of a ring at the front (angle 180°).
-const RING_FRONT_EXTENT = RING_RY + CARD_HEIGHT / 2;
+const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
+const CANVAS_WIDTH = 1060;
+const CANVAS_HEIGHT = VISIBLE_DAYS_TOTAL * VERTICAL_PER_DAY + 220;
 
-function scaleForOffset(offset: number): number {
-  if (offset === 0) return SCALE_FOCUS;
-  if (Math.abs(offset) === 1) return SCALE_NEIGHBOR_NEAR;
-  return SCALE_NEIGHBOR_FAR;
-}
-
-/**
- * Distance between the centers of two adjacent rings such that the
- * upper ring's front-bottom touches the lower ring's back-top with no
- * gap or overlap. Both scales need to be accounted for: front extent
- * scales by the upper ring's slot scale, back extent by the lower
- * ring's slot scale.
- */
-function spacingBetween(upperScale: number, lowerScale: number): number {
-  return RING_FRONT_EXTENT * upperScale + RING_BACK_EXTENT * lowerScale;
-}
-
-/** Cumulative center-y offset from the focus ring. */
-function ringCenterOffset(offset: number): number {
-  if (offset === 0) return 0;
-  const dir = Math.sign(offset);
-  let cumulative = 0;
-  for (let i = 0; i < Math.abs(offset); i++) {
-    cumulative += spacingBetween(
-      scaleForOffset(dir * i),
-      scaleForOffset(dir * (i + 1)),
-    );
-  }
-  return dir * cumulative;
-}
-
-// Pre-compute the ring layout once. STACK_HEIGHT is the actual extent
-// from the topmost back-top to the bottommost front-bottom.
-const RING_OFFSETS = Array.from(
-  { length: STACK_TOTAL_RINGS },
-  (_, i) => i - RINGS_BEFORE,
-);
-const RING_CENTERS_REL = RING_OFFSETS.map((o) => ringCenterOffset(o));
-const TOP_EDGE =
-  RING_CENTERS_REL[0]! -
-  RING_BACK_EXTENT * scaleForOffset(RING_OFFSETS[0]!);
-const BOTTOM_EDGE =
-  RING_CENTERS_REL[RING_CENTERS_REL.length - 1]! +
-  RING_FRONT_EXTENT * scaleForOffset(RING_OFFSETS[RING_OFFSETS.length - 1]!);
-const STACK_HEIGHT = BOTTOM_EDGE - TOP_EDGE;
-const FOCUS_STACK_Y = -TOP_EDGE; // ring-0 center, in stack coordinates
-
-// Canvas wide enough to fit the wheel — side cards at x = ±RX, plus
-// half a card width of overhang on each side.
-const RING_WIDTH = 1060;
-const RING_HEIGHT = RING_RY * 2 + 100; // headroom for the taller cards
-
-// Solar year track shows enough of the year to cover roughly the
-// rings on display. We approximate the px-per-day from the
-// focus↔neighbor spacing (the average is similar for nearby pairs).
-const PX_PER_DAY = spacingBetween(SCALE_FOCUS, SCALE_NEIGHBOR_NEAR) / 28;
-const TRACK_HALF_RANGE_DAYS = Math.max(RINGS_BEFORE, RINGS_AFTER) * 28 + 14;
+const CENTER_X = CANVAS_WIDTH / 2;
+const CENTER_Y = CANVAS_HEIGHT / 2;
 
 export function MoonthView() {
   const events = useEvents();
@@ -125,201 +72,279 @@ export function MoonthView() {
     return () => window.clearInterval(id);
   }, []);
 
-  const currentMoonthStart = useMemo(() => findRecentNewMoon(nowInstant), [nowInstant]);
-
-  // Today's day-in-moonth (1..28) — used both as the default focus
-  // day on first load and as the "today glow" target.
-  const todayMoonthDay = useMemo(() => {
-    const dayIndex = Math.floor(
-      (epochMs(nowInstant) - epochMs(currentMoonthStart)) / 86_400_000,
-    );
-    return Math.max(1, Math.min(28, dayIndex + 1));
-  }, [nowInstant, currentMoonthStart]);
-
-  // Initialize the focus the first time we render, then let user clicks
-  // drive it.
-  useEffect(() => {
-    ensureFocus({ moonthOffset: 0, day: todayMoonthDay });
-  }, [todayMoonthDay]);
-
-  const focus = useFocus();
-  const focusedMoonthOffset = focus?.moonthOffset ?? 0;
-  const targetDay = focus?.day ?? todayMoonthDay;
-
-  // Smoothly animate the focused day so every card on the wheel
-  // traces the actual arc as the wheel rotates, instead of taking the
-  // CSS-default straight-line chord between old and new positions
-  // (which left cards far from the center looking like they barely
-  // moved). 900 ms with ease-in-out feels deliberate without dragging.
-  const focusedDay = useAnimatedDay(targetDay, 900);
-
-  // The focused day's actual instant on the timeline — passed to the
-  // solar year track so the year-spine follows the user's navigation.
-  const focusedMoonthStart = useMemo(
-    () => moonthStartFromOffset(currentMoonthStart, focusedMoonthOffset),
-    [currentMoonthStart, focusedMoonthOffset],
-  );
-  const focusedInstant = useMemo(
+  // Today, snapped to noon UTC so the card grid aligns to day-midpoints.
+  const todayNoon = useMemo<Instant>(
     () =>
       instantFromEpochMs(
-        epochMs(focusedMoonthStart) + (targetDay - 0.5) * 86_400_000,
+        Math.floor(epochMs(nowInstant) / 86_400_000) * 86_400_000 +
+          12 * 60 * 60 * 1000,
       ),
-    [focusedMoonthStart, targetDay],
+    [nowInstant],
   );
 
-  const isViewingToday =
-    focusedMoonthOffset === 0 && targetDay === todayMoonthDay;
+  // Initialize focus to today on first render. After that the user
+  // drives focus by clicking cards.
+  useEffect(() => {
+    ensureFocus(todayNoon);
+  }, [todayNoon]);
 
-  // Use the module-level RING_OFFSETS so we don't recompute per render.
-  const ringOffsets = RING_OFFSETS;
+  const focusInstant = useFocus() ?? todayNoon;
+
+  // Smoothly animate the focus instant so card positions re-derive
+  // every frame and trace the rim continuously.
+  const animatedFocus = useAnimatedInstant(focusInstant, 900);
+
+  // For "today glow" — does the visible range include today?
+  // (Always yes for ±68 days; this is here for clarity, and also lets
+  // future zoom-out hide the glow when today is off-screen.)
+  const animatedFocusDays = (epochMs(animatedFocus) - epochMs(todayNoon)) / 86_400_000;
+  void animatedFocusDays; // future hook for "you're N days from today" UI
+
+  // Build the visible card window: VISIBLE_DAYS_TOTAL cards centered
+  // on the target focus (not the animated one — keeps the window
+  // stable while rotation animates around it).
+  const focusMs = epochMs(focusInstant);
+  const days = useMemo(() => {
+    const out: DayInfo[] = [];
+    const focusG = toGregorianUTC(focusInstant);
+    const focusNoonMs = Date.UTC(focusG.year, focusG.month - 1, focusG.day, 12);
+    for (let k = -VISIBLE_HALF_DAYS; k <= VISIBLE_HALF_DAYS; k++) {
+      const ms = focusNoonMs + k * 86_400_000;
+      const at = instantFromEpochMs(ms);
+      out.push({
+        at,
+        moonAngle: lunarWheel.positionAt(at),
+        moonSiderealAngle: lunarSiderealWheel.positionAt(at),
+      });
+    }
+    return out;
+  }, [focusMs, focusInstant]);
+
+  // Sidereal longitude of the moon at the (animated) focus — used as
+  // the angular reference so the focused card sits at angular 180°.
+  const focusSiderealAngle = useMemo(
+    () => lunarSiderealWheel.positionAt(animatedFocus),
+    [animatedFocus],
+  );
+
+  const targetMs = epochMs(focusInstant);
+  const animatedMs = epochMs(animatedFocus);
+
+  // Helper: today's noon-UTC day index relative to focus (for the today glow).
+  const todayMs = epochMs(todayNoon);
+
+  // Resolve events to per-day buckets within the visible window.
+  const eventsByDayMs = useMemo(() => groupEventsByDayMs(events, days), [events, days]);
+
+  // Compute each card's geometry. Sorted by depth so back cards render first.
+  const placed = useMemo(() => {
+    const arr = days.map((d) => {
+      const cardMs = epochMs(d.at);
+      // angle: 180° at the focused-moon-longitude, decreasing as
+      // sidereal longitude increases.
+      const deltaLong = normalizeAngle(d.moonSiderealAngle - focusSiderealAngle);
+      // Use signed delta in (-180, 180] for a clean "shortest forward
+      // distance" from focus longitude.
+      const signedDelta = deltaLong > 180 ? deltaLong - 360 : deltaLong;
+      const angleDeg = 180 - signedDelta;
+      const angleRad = (angleDeg * Math.PI) / 180;
+
+      // Days from animated focus drive the vertical position.
+      const daysFromFocus = (cardMs - animatedMs) / 86_400_000;
+      const verticalOffset = daysFromFocus * VERTICAL_PER_DAY;
+
+      const x = CENTER_X + RX * Math.sin(angleRad);
+      const y = CENTER_Y + verticalOffset - RY * Math.cos(angleRad);
+
+      // Angular scale (front-vs-back of the local turn).
+      const t = (1 - Math.cos((angleDeg - 180) * Math.PI / 180)) / 2;
+      const angularScale = 1 - (1 - SCALE_MIN) * t;
+      // Vertical scale (turns away from focus).
+      const turnsAway = Math.abs(daysFromFocus) / SIDEREAL_CYCLE_DAYS;
+      const verticalScale = Math.max(
+        SCALE_MIN,
+        1 - VERTICAL_SCALE_PER_CYCLE * turnsAway,
+      );
+      const scale = angularScale * verticalScale;
+      const opacity =
+        (1 - (1 - OPACITY_MIN) * t) *
+        Math.max(OPACITY_MIN, 1 - 0.06 * turnsAway);
+
+      return { day: d, x, y, scale, opacity, daysFromFocus, angleDeg };
+    });
+    // Back cards first (so front cards render on top).
+    arr.sort((a, b) => a.y - b.y);
+    return arr;
+  }, [days, focusSiderealAngle, animatedMs]);
 
   return (
     <section className="moonth-view">
       <header className="moonth-header">
-        <h2>Your year</h2>
+        <h2>The year, helixed</h2>
         <p className="moonth-caption">
-          {STACK_TOTAL_RINGS} moonths stacked along the solar year, viewed as a
-          torus on its side. Click any card to spin it into focus.
+          Five sidereal lunar cycles visible at once. The focused card is at
+          the front; the helix winds vertically through time and rotates
+          per cycle. Click any card to spin it into focus.
         </p>
         <p className="moonth-viewing">
-          Viewing: <strong>{formatShort(focusedInstant)}</strong>
-          {isViewingToday ? " (today)" : null}
+          Viewing: <strong>{formatShort(focusInstant)}</strong>
+          {Math.abs(epochMs(focusInstant) - todayMs) < 86_400_000 / 2
+            ? " (today)"
+            : null}
         </p>
       </header>
 
       <div className="moonth-layout">
         <SolarYearTrack
-          height={STACK_HEIGHT}
-          halfRangeDays={TRACK_HALF_RANGE_DAYS}
-          referenceInstant={focusedInstant}
+          height={CANVAS_HEIGHT}
+          halfRangeDays={VISIBLE_HALF_DAYS}
+          referenceInstant={focusInstant}
           nowInstant={nowInstant}
         />
 
         <div
-          className="moonth-stack"
-          style={{ width: RING_WIDTH, height: STACK_HEIGHT }}
+          className="helix-canvas"
+          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, position: "relative" }}
         >
-          {ringOffsets.map((relativeOffset) => {
-            // `relativeOffset` is the ring's position in the stack
-            // (-2..+2). `absoluteOffset` is how many moonths from
-            // *today's* moonth this ring actually represents. Keying
-            // by absoluteOffset means React keeps the same DOM node
-            // for a given moonth across focus changes, so CSS
-            // transitions on top/transform fire smoothly when the
-            // stack rotates.
-            const absoluteOffset = focusedMoonthOffset + relativeOffset;
-            const moonthStart = moonthStartFromOffset(
-              currentMoonthStart,
-              absoluteOffset,
-            );
-            const variant =
-              relativeOffset === 0 ? "focus" :
-              Math.abs(relativeOffset) === 1 ? "neighbor-near" :
-              "neighbor-far";
-            const stackScale = scaleForOffset(relativeOffset);
-            const ringCenterY = FOCUS_STACK_Y + ringCenterOffset(relativeOffset);
-            const ringTop = ringCenterY - RING_HEIGHT / 2;
-            const moonthEndExclusive = instantFromEpochMs(
-              epochMs(moonthStart) + 28 * 86_400_000,
-            );
-            // The "today glow" appears only on the ring that
-            // contains today (absoluteOffset === 0). For all other
-            // rings, the glow target is null.
-            const todayInThisRing = absoluteOffset === 0 ? todayMoonthDay : null;
-            return (
-              <div
-                key={absoluteOffset}
-                className="moonth-ring-slot"
-                style={{
-                  top: ringTop,
-                  left: 0,
-                  width: RING_WIDTH,
-                  height: RING_HEIGHT,
-                  transform: `scale(${stackScale})`,
-                  transformOrigin: "center center",
-                }}
-              >
-                <div className="moonth-ring-label">
-                  <span className="moonth-ring-offset">
-                    {absoluteOffset === 0 ? "this moonth" :
-                     absoluteOffset < 0 ? `${-absoluteOffset} moonth${absoluteOffset === -1 ? "" : "s"} ago` :
-                     `${absoluteOffset} moonth${absoluteOffset === 1 ? "" : "s"} ahead`}
-                  </span>
-                  <span className="moonth-ring-dates">
-                    {formatShort(moonthStart)} – {formatShort(
-                      instantFromEpochMs(epochMs(moonthEndExclusive) - 86_400_000),
-                    )}
-                  </span>
+          <div className="helix-cards">
+            {placed.map(({ day, x, y, scale, opacity }) => {
+              const cardMs = epochMs(day.at);
+              const isFocus = cardMs === targetMs;
+              const isToday =
+                Math.abs(cardMs - todayMs) < 86_400_000 / 2;
+              const moonthDay = computeDayInSynodicMoonth(day.at);
+              return (
+                <div
+                  key={cardMs}
+                  className="moonth-card-slot"
+                  style={{
+                    left: `${x - CARD_WIDTH / 2}px`,
+                    top: `${y - CARD_HEIGHT / 2}px`,
+                    transform: `scale(${scale})`,
+                    opacity,
+                    zIndex: Math.round(y),
+                  }}
+                >
+                  <DayCard
+                    moonthDay={moonthDay}
+                    moonAngle={day.moonAngle}
+                    moonSiderealAngle={day.moonSiderealAngle}
+                    at={day.at}
+                    isFocus={isFocus}
+                    isToday={isToday}
+                    events={eventsByDayMs.get(cardMs) ?? []}
+                    width={CARD_WIDTH}
+                    variant="focus"
+                  />
                 </div>
-                <MoonthRing
-                  moonthStart={moonthStart}
-                  moonthOffset={absoluteOffset}
-                  focusDay={focusedDay}
-                  targetDay={targetDay}
-                  todayMoonthDay={todayInThisRing}
-                  variant={variant}
-                  events={events}
-                  width={RING_WIDTH}
-                  height={RING_HEIGHT}
-                />
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
       <p className="moonth-footer">
-        Solar year on the left: {(TRACK_HALF_RANGE_DAYS / 30).toFixed(1)} months in either direction.
-        Each ring = 28 days; ring spacing matches {PX_PER_DAY.toFixed(1)}px/day on the track.
+        Helix pitch: {VERTICAL_PER_DAY}px / day · one turn = {SIDEREAL_CYCLE_DAYS.toFixed(2)}{" "}
+        days (sidereal) · {VISIBLE_DAYS_TOTAL} cards visible.
       </p>
     </section>
   );
 }
 
-/* ----- focus-day animation -------------------------------------------- *
- *
- *  When focus.day changes, every card on every ring needs to rotate
- *  along the rim to its new position. CSS left/top transitions would
- *  interpolate position linearly — i.e., cards would cut chords through
- *  the inside of the wheel rather than tracing the arc. We instead
- *  interpolate the focus day itself in JS over the animation duration;
- *  each frame, MoonthRing re-renders with a slightly different
- *  focusDay, and every card's position is recomputed on the rim.
- *
- *  The shortest path around the cycle is taken (so day 27 → day 2 wraps
- *  forward through day 28/1, not backward through day 14).
- * --------------------------------------------------------------------- */
+/* ----- helpers ------------------------------------------------------- */
+
+interface DayInfo {
+  at: Instant;
+  moonAngle: number;
+  moonSiderealAngle: number;
+}
+
+function formatShort(at: Instant): string {
+  const g = toGregorianUTC(at);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[g.month - 1]} ${g.day}, ${g.year}`;
+}
+
+/**
+ * Day-in-moonth label for the card — derived for display from the
+ * card's instant and the most recent synodic new moon. Not a stored
+ * primary attribute on the card.
+ */
+function computeDayInSynodicMoonth(at: Instant): number {
+  const newMoon = findRecentNewMoon(at);
+  const days = (epochMs(at) - epochMs(newMoon)) / 86_400_000;
+  return Math.max(1, Math.floor(days) + 1);
+}
+
+/**
+ * Bucket events into per-day-instant maps. Keys are the card's
+ * `at` epoch-ms (noon-UTC midpoints of each visible day).
+ */
+function groupEventsByDayMs(
+  events: CalendarEvent[],
+  days: DayInfo[],
+): Map<number, DayEventOccurrence[]> {
+  const result = new Map<number, DayEventOccurrence[]>();
+  if (days.length === 0) return result;
+  const startMs = epochMs(days[0]!.at) - 12 * 60 * 60 * 1000; // midnight of first day
+  const endMs = epochMs(days[days.length - 1]!.at) + 12 * 60 * 60 * 1000; // midnight after last day
+  for (const event of events) {
+    let cursor = instantFromEpochMs(startMs);
+    for (let i = 0; i < 200; i++) {
+      let r;
+      try {
+        r = resolve(event.rule, { registry: wheelRegistry, from: cursor });
+      } catch {
+        break;
+      }
+      if (!r) break;
+      const ms = epochMs(r.at);
+      if (ms >= endMs) break;
+      // Bucket to the day card whose noon is within ±12h.
+      const dayMidpointMs = Math.floor((ms - startMs) / 86_400_000) * 86_400_000 + startMs + 12 * 60 * 60 * 1000;
+      if (dayMidpointMs >= startMs && dayMidpointMs <= endMs) {
+        const list = result.get(dayMidpointMs) ?? [];
+        list.push({ event, at: r.at });
+        result.set(dayMidpointMs, list);
+      }
+      if (ms <= epochMs(cursor)) break;
+      cursor = instantFromEpochMs(ms + 1000);
+    }
+  }
+  for (const occurrences of result.values()) {
+    occurrences.sort((a, b) => epochMs(a.at) - epochMs(b.at));
+  }
+  return result;
+}
+
+/* ----- focus-instant animation -------------------------------------- */
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-function useAnimatedDay(target: number, duration: number): number {
-  const [value, setValue] = useState(target);
-  const valueRef = useRef(target);
+/**
+ * Animates an Instant value toward a target over `duration` ms with
+ * ease-in-out cubic. Card positions re-derive each frame, so the
+ * helix rotates continuously rather than via CSS linear interpolation.
+ */
+function useAnimatedInstant(target: Instant, duration: number): Instant {
+  const [value, setValue] = useState<Instant>(target);
+  const valueRef = useRef<Instant>(target);
   valueRef.current = value;
 
   useEffect(() => {
-    const from = valueRef.current;
-    let delta = target - from;
-    // Take the shortest path around the 28-day cycle.
-    while (delta > 14) delta -= 28;
-    while (delta < -14) delta += 28;
-    if (Math.abs(delta) < 1e-4) {
-      setValue(target);
-      return;
-    }
-
+    const fromMs = epochMs(valueRef.current);
+    const toMs = epochMs(target);
+    if (fromMs === toMs) return;
     const startTime = performance.now();
     let raf = 0;
-
     function tick(time: number) {
       const t = Math.min((time - startTime) / duration, 1);
-      const next = from + delta * easeInOutCubic(t);
-      setValue(next);
+      const nextMs = fromMs + (toMs - fromMs) * easeInOutCubic(t);
+      setValue(instantFromEpochMs(nextMs));
       if (t < 1) raf = requestAnimationFrame(tick);
     }
-
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target, duration]);

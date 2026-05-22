@@ -40,10 +40,12 @@ export interface DayEventOccurrence {
 const MAX_VISIBLE_EVENTS = 3;
 
 interface DayCardProps {
-  /** Day number within the moonth (1..28). */
+  /**
+   * The card's day-in-moonth label. With the helix model this is a
+   * derived display value, not a primary attribute — it's computed
+   * upstream as days-since-most-recent-new-moon for this card's date.
+   */
   moonthDay: number;
-  /** Which moonth this card belongs to, as offset from today's moonth. */
-  moonthOffset: number;
   /** Synodic phase angle (sun-relative) at this day, degrees [0, 360). */
   moonAngle: number;
   /**
@@ -68,7 +70,6 @@ interface DayCardProps {
 
 export function DayCard({
   moonthDay,
-  moonthOffset,
   moonAngle,
   moonSiderealAngle,
   at,
@@ -93,7 +94,7 @@ export function DayCard({
   const overflow = events.length - visible.length;
 
   function focusThisCard() {
-    setFocus({ moonthOffset, day: moonthDay });
+    setFocus(at);
   }
 
   function handleBodyClick(e: React.MouseEvent<HTMLDivElement>) {

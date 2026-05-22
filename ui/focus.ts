@@ -1,32 +1,22 @@
 /**
- * Focus state — which day-of-moonth is currently rotated to the
- * bottom-center of the wheel, in which moonth.
+ * Focus state — which instant on the helix is currently centered.
  *
- * Lives as a tiny external store (same pattern as editing.ts) because
- * it's read by MoonthView and MoonthRing for placement, and written by
- * DayCard click handlers anywhere on the wheel. Threading the setter
- * through props would mean four levels of drilling.
+ * The calendar is a continuous spiral, not a stack of discrete rings,
+ * so focus is a single Instant rather than a `{moonth, day}` pair. The
+ * focused card sits at the front-bottom of the helix; surrounding
+ * cards drape away both above (past) and below (future) as the spiral
+ * winds.
  *
- *   focus.moonthOffset  — how many moonths from "today's moonth" the
- *                          user has navigated. 0 = current moonth.
- *   focus.day            — which day-of-moonth sits at the bottom of
- *                          every visible ring.
- *
- * Initialized lazily by MoonthView via `ensureFocus` on first render,
- * once today's day-of-moonth is known. After that, only user clicks
- * change the focus — time progression does not. There's no automatic
- * "snap back to today" behavior; if we want that later, it should be
- * an explicit affordance.
+ * Module-level state so DayCard click handlers can update focus
+ * without thread-the-prop. MoonthView reads it to drive the helix
+ * layout, EventForm reads it to know what date the user is "on" for
+ * click-from-day creation.
  */
 
 import { useSyncExternalStore } from "react";
+import type { Instant } from "../src/index.js";
 
-export interface FocusState {
-  moonthOffset: number;
-  day: number;
-}
-
-let state: FocusState | null = null;
+let state: Instant | null = null;
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
@@ -36,7 +26,7 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-function getSnapshot(): FocusState | null {
+function getSnapshot(): Instant | null {
   return state;
 }
 
@@ -44,24 +34,20 @@ function notify(): void {
   for (const l of listeners) l();
 }
 
-/** Read the current focus, or null if not yet initialized. */
-export function useFocus(): FocusState | null {
+/** Read the focused instant, or null if not yet initialized. */
+export function useFocus(): Instant | null {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-/** Imperative setter — called from card click handlers. */
-export function setFocus(next: FocusState): void {
-  if (
-    state !== null &&
-    state.moonthOffset === next.moonthOffset &&
-    state.day === next.day
-  ) return;
+/** Imperative setter — usable from any click handler. */
+export function setFocus(next: Instant): void {
+  if (state !== null && state === next) return;
   state = next;
   notify();
 }
 
 /** Initialize once; subsequent calls are no-ops. */
-export function ensureFocus(initial: FocusState): void {
+export function ensureFocus(initial: Instant): void {
   if (state !== null) return;
   state = initial;
   notify();
