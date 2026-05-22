@@ -54,15 +54,16 @@ const NAKSHATRA_IDS: readonly string[] = NAKSHATRA_NAMES.map((n) =>
   n.toLowerCase().replace(/ /g, "_"),
 );
 
-/** Width of each nakshatra in degrees (360° / 27). */
-export const NAKSHATRA_WIDTH = 360 / 27;
+/** Width of each nakshatra in degrees (360° / 27). Kept private; the
+ *  canonical export is `NAKSHATRA_WIDTH` from `src/zodiac.ts`. */
+const NAKSHATRA_STEP = 360 / 27;
 
 export const LUNAR_SIDEREAL_ANCHORS: readonly Anchor[] = NAKSHATRA_NAMES.map(
   (name, i) => ({
     id: NAKSHATRA_IDS[i]!,
     name,
     wheelId: "lunar_sidereal",
-    angle: i * NAKSHATRA_WIDTH,
+    angle: i * NAKSHATRA_STEP,
   }),
 );
 

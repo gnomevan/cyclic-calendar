@@ -8,6 +8,11 @@ import {
   lunarSiderealWheel,
   ayanamsa,
   NAKSHATRA_WIDTH,
+  NAKSHATRAS,
+  WESTERN_SIGNS,
+  labelsFor,
+  nakshatraAt,
+  westernSignAt,
   heliacalRisingAngle,
   fromISOString,
   toISOString,
@@ -15,6 +20,7 @@ import {
   normalizeAngle,
   angleDelta,
   type PinningRule,
+  type Planet,
   type ResolveContext,
 } from "../src/index.js";
 
@@ -508,6 +514,75 @@ describe("sidereal lunar wheel", () => {
     expect(anchors[1]!.angle).toBeCloseTo(NAKSHATRA_WIDTH, 5);
     expect(anchors[26]!.name).toBe("Revati");
     expect(anchors[26]!.angle).toBeCloseTo(26 * NAKSHATRA_WIDTH, 5);
+  });
+});
+
+describe("zodiac labels", () => {
+  it("westernSignAt: 0° = Aries, 30° = Taurus, 359° = Pisces", () => {
+    expect(westernSignAt(0).id).toBe("aries");
+    expect(westernSignAt(15).id).toBe("aries");
+    expect(westernSignAt(29.99).id).toBe("aries");
+    expect(westernSignAt(30).id).toBe("taurus");
+    expect(westernSignAt(180).id).toBe("libra");
+    expect(westernSignAt(359).id).toBe("pisces");
+  });
+
+  it("westernSignAt: handles wrap and negative angles", () => {
+    expect(westernSignAt(360).id).toBe("aries");
+    expect(westernSignAt(720).id).toBe("aries");
+    expect(westernSignAt(-30).id).toBe("pisces");
+    expect(westernSignAt(-1).id).toBe("pisces");
+  });
+
+  it("nakshatraAt: 0° = Ashvini, 13.33° = Bharani, 359° = Revati", () => {
+    expect(nakshatraAt(0).id).toBe("ashvini");
+    expect(nakshatraAt(13.32).id).toBe("ashvini");
+    expect(nakshatraAt(13.34).id).toBe("bharani");
+    expect(nakshatraAt(26.7).id).toBe("krittika");
+    expect(nakshatraAt(359).id).toBe("revati");
+  });
+
+  it("nakshatra ruler cycle: Ketu → Venus → Sun → Moon → Mars → Rahu → Jupiter → Saturn → Mercury, three times", () => {
+    const cycle: Planet[] = [
+      "ketu", "venus", "sun", "moon", "mars",
+      "rahu", "jupiter", "saturn", "mercury",
+    ];
+    for (let i = 0; i < 27; i++) {
+      expect(NAKSHATRAS[i]!.rulingPlanet).toBe(cycle[i % 9]);
+    }
+  });
+
+  it("labelsFor: returns Western sign + nakshatra + planet-derived color", () => {
+    // At 0° sidereal: Aries (fire, Mars-ruled) + Ashvini (Ketu-ruled, Ketu color)
+    const at0 = labelsFor(0);
+    expect(at0.westernSign.id).toBe("aries");
+    expect(at0.nakshatra.id).toBe("ashvini");
+    expect(at0.nakshatraColor.planet).toBe("ketu");
+    expect(at0.nakshatraColor.colorHex).toBe("#7A5B3E");
+
+    // At 90°: Cancer (sign 3, 90°-120°) + Punarvasu (nakshatra 6,
+    // ~80°-93.33°, Jupiter-ruled)
+    const at90 = labelsFor(90);
+    expect(at90.westernSign.id).toBe("cancer");
+    expect(at90.nakshatra.id).toBe("punarvasu");
+    expect(at90.nakshatraColor.planet).toBe("jupiter");
+
+    // At 100°: still Cancer + Pushya (~93.33°-106.67°, Saturn-ruled)
+    const at100 = labelsFor(100);
+    expect(at100.westernSign.id).toBe("cancer");
+    expect(at100.nakshatra.id).toBe("pushya");
+    expect(at100.nakshatraColor.planet).toBe("saturn");
+  });
+
+  it("WESTERN_SIGNS has all 12, in order, with consistent metadata", () => {
+    expect(WESTERN_SIGNS.length).toBe(12);
+    expect(WESTERN_SIGNS[0]!.id).toBe("aries");
+    expect(WESTERN_SIGNS[11]!.id).toBe("pisces");
+    // Every sign has a non-empty colorHex starting with #.
+    for (const s of WESTERN_SIGNS) {
+      expect(s.colorHex.startsWith("#")).toBe(true);
+      expect(s.colorHex.length).toBe(7);
+    }
   });
 });
 

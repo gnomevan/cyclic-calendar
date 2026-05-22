@@ -65,9 +65,30 @@ export {
 export {
   lunarSiderealWheel,
   LUNAR_SIDEREAL_ANCHORS,
-  NAKSHATRA_WIDTH,
   ayanamsa,
 } from "./wheels/lunar_sidereal.js";
+
+// Zodiac labels — both sidereal Western 12-sign and Vedic 27-nakshatra
+// palettes, plus colors per the project conventions.
+export type {
+  Planet,
+  PlanetColor,
+  Element,
+  WesternSign,
+  Nakshatra,
+  ZodiacLabels,
+} from "./zodiac.js";
+export {
+  PLANET_COLORS,
+  WESTERN_SIGNS,
+  WESTERN_SIGN_WIDTH,
+  NAKSHATRAS,
+  NAKSHATRA_COUNT,
+  NAKSHATRA_WIDTH,
+  westernSignAt,
+  nakshatraAt,
+  labelsFor,
+} from "./zodiac.js";
 
 // Serialization (boundary between trusted PinningRule values and untrusted JSON)
 export {
