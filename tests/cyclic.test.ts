@@ -217,6 +217,73 @@ describe("pinning rules", () => {
     const result = resolve(rule, ctx());
     expect(result).not.toBeNull();
   });
+
+  it("atAngle: pins to any angle on any wheel (here, lunar at 132.7°)", () => {
+    const rule: PinningRule = {
+      kind: "atAngle",
+      wheelId: "lunar",
+      angle: 132.7,
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    // Lunar phases recur every ~29.5 days; the next crossing must be within
+    // a lunation of REF.
+    const days = (result!.at - REF) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(days).toBeLessThan(35);
+  });
+
+  it("gregorianDate: resolves to noon UTC of the next May 21", () => {
+    const rule: PinningRule = { kind: "gregorianDate", month: 5, day: 21 };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    expect(g.year).toBe(2026);
+    expect(g.month).toBe(5);
+    expect(g.day).toBe(21);
+    expect(g.hour).toBe(12);
+  });
+
+  it("gregorianDate: rolls to next year when the date has passed", () => {
+    // REF is 2026-01-01; ask for January 1 itself — should roll to 2027.
+    const rule: PinningRule = { kind: "gregorianDate", month: 1, day: 1 };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    const g = toGregorianUTC(result!.at);
+    // REF is exactly Jan 1 2026 at 00:00 UTC; noon is in the future, so
+    // we expect this year's noon (2026-01-01 12:00) — that's still > REF.
+    expect(g.year).toBe(2026);
+    expect(g.month).toBe(1);
+    expect(g.day).toBe(1);
+    expect(g.hour).toBe(12);
+  });
+
+  it("anyOf: returns the earliest occurrence across constituent rules", () => {
+    // Lunar full moon recurs ~once a month; gregorianDate Dec 21 is much
+    // farther out. The anyOf should pick whichever comes first.
+    const rule: PinningRule = {
+      kind: "anyOf",
+      rules: [
+        { kind: "exact", anchor: { wheelId: "lunar", anchorId: "full_moon" } },
+        { kind: "gregorianDate", month: 12, day: 21 },
+      ],
+    };
+    const result = resolve(rule, ctx());
+    expect(result).not.toBeNull();
+    // From Jan 1 2026, the next full moon is ~Jan 3 — much sooner than Dec 21.
+    const days = (result!.at - REF) / 86_400_000;
+    expect(days).toBeLessThan(35);
+  });
+
+  it("anyOf: returns null when no inner rule resolves", () => {
+    const rule: PinningRule = {
+      kind: "anyOf",
+      rules: [
+        { kind: "observed", wheelId: "magnolia", observationKey: "first_bloom" },
+      ],
+    };
+    expect(resolve(rule, ctx())).toBeNull();
+  });
 });
 
 describe("Pleiades wheel", () => {

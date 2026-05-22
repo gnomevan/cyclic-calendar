@@ -116,6 +116,12 @@ function describeRule(rule: PinningRule): string {
       return `${ref(rule.target)} between ${ref(rule.start)} and ${ref(rule.end)}`;
     case "observed":
       return `observed: ${rule.wheelId} / ${rule.observationKey}`;
+    case "atAngle":
+      return `${rule.wheelId} at ${rule.angle.toFixed(1)}°`;
+    case "gregorianDate":
+      return `every ${rule.month}/${rule.day} (Gregorian)`;
+    case "anyOf":
+      return `any of: ${rule.rules.map(describeRule).join(" / ")}`;
   }
 }
 

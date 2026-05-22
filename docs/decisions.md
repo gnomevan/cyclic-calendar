@@ -451,3 +451,157 @@ The schema we are committing to here works with any of them.
 - Sync turning out to be premature even as scaffolding (user remains
   single-device forever). The columns still cost essentially nothing,
   so the downside is small even in that case.
+
+---
+
+## ADR-012: `atAngle` and `gregorianDate` as new pinning primitives
+
+**Decided**: Two new primitives are added to the PinningRule union:
+
+- `{ kind: "atAngle"; wheelId: string; angle: number }` — pin to any
+  angle on any wheel, generalizing `exact` to arbitrary
+  (not-necessarily-named) angles.
+- `{ kind: "gregorianDate"; month: number; day: number }` — pin to a
+  specific Gregorian calendar date, recurring annually.
+
+**Background**: ADR-004 fixed seven primitives and set a high bar for
+an eighth: *"a real use case from the user's life that none of the
+seven can express even when composed."* Two such use cases have now
+arrived together, both driven by daily-use UI:
+
+1. **Click-empty-day to create.** When the user clicks May 21 to make
+   a new event, the natural defaults are "attach to the lunar phase
+   I'm currently at" and "attach to this calendar date." The lunar
+   phase is a specific angle (~133°) that is almost never a named
+   anchor like `full_moon` (180°) or `first_quarter` (90°). The seven
+   existing primitives cannot express "the lunar wheel at 133°" —
+   `exact` requires a named anchor, and the others compose anchors
+   into more complex shapes but don't yield raw angles.
+
+2. **One-off events on a calendar date.** "My birthday is May 21" is
+   a real recurrence, but it is in Gregorian terms — not solar
+   degrees (which drift fractionally each year due to leap-day
+   bookkeeping). No existing primitive expresses "every May 21";
+   composing them through anchors doesn't get there because the
+   anchors are celestial, not civil.
+
+**Alternatives considered**:
+
+1. Express lunar-at-133° as a personal anchor created on the fly,
+   then use `exact` against it. Rejected because personal anchors are
+   long-lived user storage; minting one per event-creation pollutes
+   the anchor namespace and conflates two different intents (named
+   reference points vs. ad-hoc captured positions).
+
+2. Add a `lunarPhase` primitive and a separate `solarAngle`
+   primitive instead of one generic `atAngle`. Rejected because the
+   wheel interface (ADR-003) is deliberately uniform — picking out
+   specific wheels with their own rule kinds would re-establish the
+   wheel-specific surface the interface was designed to flatten. The
+   generic `atAngle` works for *any* wheel without further machinery,
+   including future wheels we haven't built yet.
+
+3. Treat the Gregorian calendar as a wheel with 365–366 named
+   anchors. Rejected because the Gregorian year isn't actually
+   cyclic in the same sense as the solar year — leap days, sidereal
+   precession, and civil reforms make "this calendar date" a Civil
+   construct, not an astronomical position. Forcing it into the
+   wheel abstraction would muddy the cleanest seam in the codebase
+   (ADR-005: `src/gregorian.ts` is the single point of Gregorian
+   contact). One purpose-built rule kind that calls into
+   `fromGregorianUTC` is the honest implementation.
+
+4. Defer this until we can find one *unified* primitive that handles
+   both cases. Rejected because they really are different — one is a
+   wheel angle, one is a civil-calendar date. Forcing them into a
+   single shape would be a worse abstraction than two clean ones.
+
+**Resolver semantics**:
+
+- `atAngle` calls `wheel.nextCrossing(angle, ctx.from, ctx.observer)`
+  directly. Same machinery as `exact`, different argument source.
+- `gregorianDate` resolves to noon UTC on the next calendar date
+  matching the rule. Noon is chosen because midnight is ambiguous
+  near time-zone boundaries; noon is unambiguously "this day" in
+  every zone the user might be in. If the date has already passed
+  this year, the resolver rolls to next year.
+
+**Why this isn't a slippery slope to a dozen more primitives**: the
+ADR-004 bar still holds. Future additions need to express something
+fundamentally not composable from the existing set. `atAngle` and
+`gregorianDate` clear it because they introduce two new degrees of
+freedom (arbitrary angle, civil date) that no composition of the
+seven could reach.
+
+**Would force a revisit**: discovering that `atAngle` and `exact` can
+be merged without losing semantic clarity (an `exact` rule is just an
+`atAngle` whose angle happens to match a named anchor's). That would
+remove one branch, but the readability of `exact: solar.winter_solstice`
+versus `atAngle: solar, 270°` likely justifies keeping both.
+
+---
+
+## ADR-013: `anyOf` — events attached to multiple cycles
+
+**Decided**: A composite rule kind is added:
+
+```
+{ kind: "anyOf"; rules: PinningRule[] }
+```
+
+An `anyOf` event occurs each time *any* of its constituent rules
+fires. Each constituent contributes its own recurrence pattern; the
+event is visible at the union of all of them.
+
+**Background**: A core claim of the project (recorded in the
+foundation document and made concrete by the moonth view) is that *a
+date is the intersection of multiple cycles*. When a user creates an
+event from a click on a day card, they intuitively want the event to
+"live" on all those cycles at once: the lunar phase that day, the
+solar position that day, the Gregorian calendar date. Each is a
+legitimate way to find the event again later, and the user should not
+be forced to pick one.
+
+The pre-existing rule structure had `CalendarEvent.rule: PinningRule`
+(singular) and no way to combine recurrences. `conjunction` already
+existed but means the *opposite* — "all anchors must align in time."
+For multi-cycle attachment we need *union*, not *intersection*.
+
+**Alternatives considered**:
+
+1. Make `CalendarEvent` hold an array of rules instead of one. A
+   simpler-looking change, but it pushes the union semantics into
+   every consumer of `CalendarEvent` and breaks the existing
+   serializer / repository / resolver contracts that all assume one
+   rule per event. Composing the multi-rule structure into a single
+   rule (`anyOf`) keeps the boundary clean.
+
+2. Repurpose `conjunction` to mean union with an extra flag. Rejected
+   because conjunction's existing semantics are load-bearing for
+   real patterns ("solstice-full-moon alignment"). A flag would
+   create two meanings under one kind, which is worse than two kinds
+   with one meaning each.
+
+3. Defer this until the click-empty-day flow forces it. That is in
+   fact the present moment, so this ADR records the decision now.
+
+**Resolver semantics**: `anyOf` returns the earliest occurrence among
+its constituent rules, or null if every constituent returns null. The
+existing iterative walk in `groupEventsByDay` already advances the
+cursor past each returned occurrence and re-resolves, so an event
+with `[lunar, solar, gregorian]` attachments will be returned three
+separate times as the cursor moves through the window.
+
+**Composition with existing primitives**: `anyOf` can wrap any
+`PinningRule`, including other `anyOf`s. There is no semantic problem
+with nesting; the resolver handles it naturally. The form UI
+currently only constructs *flat* `anyOf` rules with atomic
+constituents.
+
+**Would force a revisit**:
+
+- A user-facing need for `allOf` (intersection that isn't bounded by
+  time tolerance the way `conjunction` is). Possible, but no concrete
+  use case yet.
+- Performance issues if events accumulate dozens of attached cycles.
+  At v1 scale (a handful of attachments per event), this is fine.

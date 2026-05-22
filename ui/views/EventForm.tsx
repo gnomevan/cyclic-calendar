@@ -1,26 +1,41 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  lunarWheel,
+  solarWheel,
+  toGregorianUTC,
   type AnchorRef,
+  type Instant,
   type PinningRule,
   type TimeReference,
 } from "../../src/index.js";
 import { AnchorPicker } from "../components/AnchorPicker.js";
+import { phaseName } from "../components/MoonGlyph.js";
 import { TimeRefPicker } from "../components/TimeRefPicker.js";
-import { setEditingEventId, useEditingEventId } from "../editing.js";
+import {
+  clearEditingState,
+  setEditingEventId,
+  useCreatingFromDay,
+  useEditingEventId,
+} from "../editing.js";
 import { addEvent, updateEvent, useEvents } from "../store.js";
 
 /**
- * Event creation form. The seven pinning-rule kinds map onto seven
- * conditional field groups; picking a kind shows the fields for that
- * kind only.
+ * Event creation form. Two modes:
+ *
+ * 1. **Simple (click-from-day)**: pre-checked checkboxes for attaching
+ *    the event to the lunar phase, solar position, and Gregorian date
+ *    at the clicked moment. Each checked attachment becomes a rule,
+ *    and the resulting event's `rule` is the union (`anyOf`) of all
+ *    attachments.
+ *
+ * 2. **Advanced (kind picker)**: the original interface — pick one of
+ *    the seven pinning-rule kinds and configure its fields. Still
+ *    available via the "Add event" entry and for editing rules that
+ *    don't fit the simple shape.
  *
  * The form's working state is a single `RuleDraft` with every possible
  * field optional. On submit, `buildRule` walks the active kind and
  * either returns a `PinningRule` or `null` (= still incomplete).
- *
- * Composition (TimeReference "rule") is not exposed in the picker;
- * users who need it can author the rule JSON directly in storage once
- * we add an import flow, or wait for the recursive form in 3.c.5.
  */
 
 const KIND_LABELS: Record<PinningRule["kind"], string> = {
@@ -31,7 +46,27 @@ const KIND_LABELS: Record<PinningRule["kind"], string> = {
   conjunction: "Conjunction — multiple anchors aligned",
   withinRange: "Within range — X between two anchors",
   observed: "Observed — logged by hand",
+  atAngle: "At angle — pin to a wheel angle directly",
+  gregorianDate: "Gregorian date — recur on a calendar date",
+  anyOf: "Any of — union of multiple rules",
 };
+
+interface AttachmentChecks {
+  lunar: boolean;
+  solar: boolean;
+  gregorian: boolean;
+}
+
+const DEFAULT_ATTACHMENTS: AttachmentChecks = {
+  lunar: true,
+  solar: true,
+  gregorian: true,
+};
+
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
 interface RuleDraft {
   kind: PinningRule["kind"];
@@ -47,14 +82,21 @@ interface RuleDraft {
   end?: AnchorRef;
   wheelId?: string;
   observationKey?: string;
+  angle?: number;      // atAngle
+  month?: number;      // gregorianDate
+  day?: number;        // gregorianDate
 }
 
 export function EventForm() {
   const events = useEvents();
   const editingEventId = useEditingEventId();
+  const creatingFromDay = useCreatingFromDay();
   const editingEvent = editingEventId
     ? events.find((e) => e.id === editingEventId) ?? null
     : null;
+
+  const isEditing = editingEventId !== null;
+  const isSimpleCreate = creatingFromDay !== null;
 
   const formRef = useRef<HTMLElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -63,12 +105,18 @@ export function EventForm() {
   const [description, setDescription] = useState("");
   const [isOrigin, setIsOrigin] = useState(false);
   const [draft, setDraft] = useState<RuleDraft>({ kind: "exact" });
+  const [attachments, setAttachments] = useState<AttachmentChecks>(DEFAULT_ATTACHMENTS);
   const [error, setError] = useState<string | null>(null);
 
-  // When the editing target changes (e.g., user clicks an event on a
-  // card), pull its fields into the form and scroll the form into view
-  // so the click has visible feedback. When edit mode clears, reset
-  // the form back to empty.
+  // Pre-computed cycle positions for the simple-create mode.
+  const dayCycles = useMemo(() => {
+    if (creatingFromDay === null) return null;
+    return computeDayCycles(creatingFromDay);
+  }, [creatingFromDay]);
+
+  // When the editing target changes (user clicks an event on a card),
+  // pull its fields into the form and scroll into view. When edit
+  // mode clears, reset.
   useEffect(() => {
     if (editingEvent) {
       setName(editingEvent.name);
@@ -77,15 +125,24 @@ export function EventForm() {
       setDraft(ruleToDraft(editingEvent.rule));
       setError(null);
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Focus the name field once the scroll settles.
       window.setTimeout(() => nameRef.current?.focus(), 350);
-    } else {
+    } else if (!creatingFromDay) {
       reset();
     }
-    // Key only on the id so the user's in-flight edits aren't clobbered
-    // every render when the events list reference changes for unrelated reasons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingEventId]);
+
+  // When click-from-day creation starts, reset the form to defaults
+  // and scroll/focus.
+  useEffect(() => {
+    if (creatingFromDay) {
+      reset();
+      setAttachments(DEFAULT_ATTACHMENTS);
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.setTimeout(() => nameRef.current?.focus(), 350);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creatingFromDay]);
 
   function update<K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -100,7 +157,8 @@ export function EventForm() {
   }
 
   function handleCancel() {
-    setEditingEventId(null);
+    clearEditingState();
+    reset();
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -110,11 +168,22 @@ export function EventForm() {
       setError("Name is required.");
       return;
     }
-    const rule = buildRule(draft);
-    if (!rule) {
-      setError("Rule is incomplete — fill every field for the chosen kind.");
-      return;
+
+    let rule: PinningRule | null;
+    if (isSimpleCreate && dayCycles) {
+      rule = buildAttachmentRule(attachments, dayCycles);
+      if (!rule) {
+        setError("Pick at least one cycle to attach the event to.");
+        return;
+      }
+    } else {
+      rule = buildRule(draft);
+      if (!rule) {
+        setError("Rule is incomplete — fill every field for the chosen kind.");
+        return;
+      }
     }
+
     const input = {
       name: name.trim(),
       ...(description.trim() && { description: description.trim() }),
@@ -126,16 +195,21 @@ export function EventForm() {
     } else {
       addEvent(input);
     }
-    setEditingEventId(null);
+    clearEditingState();
     reset();
   }
 
-  const isEditing = editingEventId !== null;
+  const headingKind = isEditing ? "edit" : isSimpleCreate ? "new on day" : "create";
+  const headingTitle = isEditing
+    ? "Edit event"
+    : isSimpleCreate
+    ? "New event"
+    : "New event";
 
   return (
     <section ref={formRef} className="wheel-card event-form">
-      <div className="wheel-kind">{isEditing ? "edit" : "create"}</div>
-      <h2>{isEditing ? "Edit event" : "New event"}</h2>
+      <div className="wheel-kind">{headingKind}</div>
+      <h2>{headingTitle}</h2>
       <form onSubmit={handleSubmit}>
         <label>
           Name
@@ -167,27 +241,39 @@ export function EventForm() {
           Treat as origin (this event can anchor counts)
         </label>
 
-        <label>
-          Rule
-          <select
-            value={draft.kind}
-            onChange={(e) => setDraft({ kind: e.target.value as PinningRule["kind"] })}
-          >
-            {Object.entries(KIND_LABELS).map(([kind, label]) => (
-              <option key={kind} value={kind}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isSimpleCreate && dayCycles ? (
+          <AttachmentChecklist
+            cycles={dayCycles}
+            attachments={attachments}
+            onChange={setAttachments}
+          />
+        ) : (
+          <>
+            <label>
+              Rule
+              <select
+                value={draft.kind}
+                onChange={(e) => setDraft({ kind: e.target.value as PinningRule["kind"] })}
+              >
+                {Object.entries(KIND_LABELS).map(([kind, label]) => (
+                  <option key={kind} value={kind}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <RuleFields draft={draft} update={update} />
+            <RuleFields draft={draft} update={update} />
+          </>
+        )}
 
         {error && <p className="error">{error}</p>}
 
         <div className="event-form-buttons">
-          <button type="submit">{isEditing ? "Update event" : "Add event"}</button>
-          {isEditing && (
+          <button type="submit">
+            {isEditing ? "Update event" : "Add event"}
+          </button>
+          {(isEditing || isSimpleCreate) && (
             <button type="button" className="event-form-cancel" onClick={handleCancel}>
               Cancel
             </button>
@@ -355,6 +441,75 @@ function RuleFields({ draft, update }: RuleFieldsProps) {
           </label>
         </>
       );
+
+    case "atAngle":
+      return (
+        <>
+          <label>
+            Wheel id
+            <input
+              type="text"
+              value={draft.wheelId ?? ""}
+              onChange={(e) => update("wheelId", e.target.value || undefined)}
+              placeholder="solar / lunar / pleiades"
+            />
+          </label>
+          <label>
+            Angle (degrees, 0–360)
+            <input
+              type="number"
+              min={0}
+              max={360}
+              step={0.1}
+              value={draft.angle ?? ""}
+              onChange={(e) =>
+                update("angle", e.target.value ? Number(e.target.value) : undefined)
+              }
+            />
+          </label>
+        </>
+      );
+
+    case "gregorianDate":
+      return (
+        <>
+          <label>
+            Month (1–12)
+            <input
+              type="number"
+              min={1}
+              max={12}
+              step={1}
+              value={draft.month ?? ""}
+              onChange={(e) =>
+                update("month", e.target.value ? Number(e.target.value) : undefined)
+              }
+            />
+          </label>
+          <label>
+            Day (1–31)
+            <input
+              type="number"
+              min={1}
+              max={31}
+              step={1}
+              value={draft.day ?? ""}
+              onChange={(e) =>
+                update("day", e.target.value ? Number(e.target.value) : undefined)
+              }
+            />
+          </label>
+        </>
+      );
+
+    case "anyOf":
+      return (
+        <p className="hint">
+          This event is attached to multiple cycles. Editing the attachment
+          set isn't supported in advanced mode yet — delete and recreate
+          if you need to change which cycles it lives on.
+        </p>
+      );
   }
 }
 
@@ -440,6 +595,28 @@ function buildRule(draft: RuleDraft): PinningRule | null {
       return draft.wheelId && draft.observationKey
         ? { kind: "observed", wheelId: draft.wheelId, observationKey: draft.observationKey }
         : null;
+
+    case "atAngle":
+      return draft.wheelId && typeof draft.angle === "number"
+        ? { kind: "atAngle", wheelId: draft.wheelId, angle: draft.angle }
+        : null;
+
+    case "gregorianDate":
+      return typeof draft.month === "number" &&
+        typeof draft.day === "number" &&
+        draft.month >= 1 &&
+        draft.month <= 12 &&
+        draft.day >= 1 &&
+        draft.day <= 31
+        ? { kind: "gregorianDate", month: draft.month, day: draft.day }
+        : null;
+
+    case "anyOf":
+      // anyOf is currently authored only via the simple click-from-day
+      // flow. In advanced mode the user can pick this kind, but we
+      // don't yet expose a sub-rule editor — so the rule stays
+      // unbuildable from this path.
+      return null;
   }
 }
 
@@ -484,5 +661,104 @@ function ruleToDraft(rule: PinningRule): RuleDraft {
         wheelId: rule.wheelId,
         observationKey: rule.observationKey,
       };
+    case "atAngle":
+      return { kind: "atAngle", wheelId: rule.wheelId, angle: rule.angle };
+    case "gregorianDate":
+      return { kind: "gregorianDate", month: rule.month, day: rule.day };
+    case "anyOf":
+      // The advanced kind picker doesn't support editing anyOf (the
+      // form would need a recursive list). For now we surface it as a
+      // read-only kind label; the user can delete and recreate.
+      return { kind: "anyOf" };
   }
+}
+
+/* ----- Simple click-from-day creation helpers ------------------------ */
+
+interface DayCycles {
+  lunarAngle: number;
+  solarAngle: number;
+  month: number;
+  day: number;
+}
+
+function computeDayCycles(at: Instant): DayCycles {
+  const g = toGregorianUTC(at);
+  return {
+    lunarAngle: lunarWheel.positionAt(at),
+    solarAngle: solarWheel.positionAt(at),
+    month: g.month,
+    day: g.day,
+  };
+}
+
+function buildAttachmentRule(
+  attachments: AttachmentChecks,
+  cycles: DayCycles,
+): PinningRule | null {
+  const subRules: PinningRule[] = [];
+  if (attachments.lunar) {
+    subRules.push({ kind: "atAngle", wheelId: "lunar", angle: cycles.lunarAngle });
+  }
+  if (attachments.solar) {
+    subRules.push({ kind: "atAngle", wheelId: "solar", angle: cycles.solarAngle });
+  }
+  if (attachments.gregorian) {
+    subRules.push({ kind: "gregorianDate", month: cycles.month, day: cycles.day });
+  }
+  if (subRules.length === 0) return null;
+  if (subRules.length === 1) return subRules[0]!;
+  return { kind: "anyOf", rules: subRules };
+}
+
+interface AttachmentChecklistProps {
+  cycles: DayCycles;
+  attachments: AttachmentChecks;
+  onChange: (next: AttachmentChecks) => void;
+}
+
+function AttachmentChecklist({ cycles, attachments, onChange }: AttachmentChecklistProps) {
+  function toggle(key: keyof AttachmentChecks) {
+    onChange({ ...attachments, [key]: !attachments[key] });
+  }
+
+  const lunarLabel = `${phaseName(cycles.lunarAngle)} (${cycles.lunarAngle.toFixed(1)}°)`;
+  const solarLabel = `${cycles.solarAngle.toFixed(1)}° on the solar wheel`;
+  const gregorianLabel = `${MONTH_NAMES[cycles.month - 1]} ${cycles.day} (recurs annually)`;
+
+  return (
+    <fieldset className="attachment-checklist">
+      <legend>Attach to (recurs at each checked cycle)</legend>
+      <label className="inline">
+        <input
+          type="checkbox"
+          checked={attachments.lunar}
+          onChange={() => toggle("lunar")}
+        />
+        <span>
+          <strong>Lunar phase</strong> · {lunarLabel}
+        </span>
+      </label>
+      <label className="inline">
+        <input
+          type="checkbox"
+          checked={attachments.solar}
+          onChange={() => toggle("solar")}
+        />
+        <span>
+          <strong>Solar position</strong> · {solarLabel}
+        </span>
+      </label>
+      <label className="inline">
+        <input
+          type="checkbox"
+          checked={attachments.gregorian}
+          onChange={() => toggle("gregorian")}
+        />
+        <span>
+          <strong>Gregorian date</strong> · {gregorianLabel}
+        </span>
+      </label>
+    </fieldset>
+  );
 }

@@ -4,7 +4,7 @@ import {
   type CalendarEvent,
   type Instant,
 } from "../../src/index.js";
-import { setEditingEventId } from "../editing.js";
+import { setEditingEventId, startCreatingFromDay } from "../editing.js";
 import { MoonGlyph } from "./MoonGlyph.js";
 
 /**
@@ -72,6 +72,12 @@ export function DayCard({
   const visible = events.slice(0, MAX_VISIBLE_EVENTS);
   const overflow = events.length - visible.length;
 
+  function handleEmptyClick(e: React.MouseEvent<HTMLDivElement>) {
+    // Avoid triggering when the click landed on an existing event button.
+    if ((e.target as HTMLElement).closest(".day-card-event-btn")) return;
+    startCreatingFromDay(at);
+  }
+
   return (
     <div className={classes.join(" ")} style={{ width, height }}>
       <div className="day-card-head">
@@ -82,28 +88,34 @@ export function DayCard({
           <span className="day-card-greg-day">{greDay}</span>
         </div>
       </div>
-      {events.length === 0 ? (
-        <div className="day-card-empty" aria-hidden="true" />
-      ) : (
-        <ul className="day-card-events">
-          {visible.map(({ event, at: occurrenceAt }) => (
-            <li key={event.id}>
-              <button
-                type="button"
-                className="day-card-event-btn"
-                title={event.description ?? event.name}
-                onClick={() => setEditingEventId(event.id)}
-              >
-                <time>{formatTime(occurrenceAt)}</time>
-                <span className="day-card-event-name">{event.name}</span>
-              </button>
-            </li>
-          ))}
-          {overflow > 0 && (
-            <li className="day-card-overflow">+{overflow} more</li>
-          )}
-        </ul>
-      )}
+      <div
+        className="day-card-body"
+        onClick={handleEmptyClick}
+        title="Click to add an event on this day"
+      >
+        {events.length === 0 ? (
+          <div className="day-card-empty" aria-hidden="true" />
+        ) : (
+          <ul className="day-card-events">
+            {visible.map(({ event, at: occurrenceAt }) => (
+              <li key={event.id}>
+                <button
+                  type="button"
+                  className="day-card-event-btn"
+                  title={event.description ?? event.name}
+                  onClick={() => setEditingEventId(event.id)}
+                >
+                  <time>{formatTime(occurrenceAt)}</time>
+                  <span className="day-card-event-name">{event.name}</span>
+                </button>
+              </li>
+            ))}
+            {overflow > 0 && (
+              <li className="day-card-overflow">+{overflow} more</li>
+            )}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

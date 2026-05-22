@@ -240,7 +240,7 @@ describe("Sync surface (Step 4): explicitly not implemented in v1", () => {
 });
 
 describe("PinningRule serialization", () => {
-  it("round-trips all seven primitives", () => {
+  it("round-trips all primitive rule kinds", () => {
     const rules: PinningRule[] = [
       { kind: "exact", anchor: { wheelId: "solar", anchorId: "winter_solstice" } },
       {
@@ -273,11 +273,37 @@ describe("PinningRule serialization", () => {
         end: { wheelId: "solar", anchorId: "beltane" },
       },
       { kind: "observed", wheelId: "magnolia", observationKey: "first_bloom" },
+      { kind: "atAngle", wheelId: "lunar", angle: 132.7 },
+      { kind: "gregorianDate", month: 5, day: 21 },
     ];
     for (const r of rules) {
       const json = serializePinningRule(r);
       expect(deserializePinningRule(json)).toEqual(r);
     }
+  });
+
+  it("anyOf composite round-trips with nested rules", () => {
+    const rule: PinningRule = {
+      kind: "anyOf",
+      rules: [
+        { kind: "atAngle", wheelId: "lunar", angle: 132.7 },
+        { kind: "atAngle", wheelId: "solar", angle: 60.2 },
+        { kind: "gregorianDate", month: 5, day: 21 },
+      ],
+    };
+    expect(deserializePinningRule(serializePinningRule(rule))).toEqual(rule);
+  });
+
+  it("rejects gregorianDate with invalid month or day", () => {
+    expect(() => validatePinningRule({ kind: "gregorianDate", month: 13, day: 1 }))
+      .toThrow(SerializationError);
+    expect(() => validatePinningRule({ kind: "gregorianDate", month: 5, day: 32 }))
+      .toThrow(SerializationError);
+  });
+
+  it("rejects empty anyOf rules array", () => {
+    expect(() => validatePinningRule({ kind: "anyOf", rules: [] }))
+      .toThrow(SerializationError);
   });
 
   it("composed rules (rule-inside-rule) survive a round trip", () => {

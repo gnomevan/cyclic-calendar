@@ -153,4 +153,30 @@ export type PinningRule =
    * observational wheel; `observationKey` identifies which kind of logged
    * observation feeds this event.
    */
-  | { kind: "observed"; wheelId: string; observationKey: string };
+  | { kind: "observed"; wheelId: string; observationKey: string }
+
+  /**
+   * Recurs each time `wheelId` reaches `angle`. Generalizes `exact` to
+   * arbitrary angles — `exact` references a *named* anchor on a wheel;
+   * `atAngle` references any angle. Used for events created from a click
+   * on a day card, where the captured lunar/solar position rarely lands
+   * exactly on a named anchor (see ADR-012).
+   */
+  | { kind: "atAngle"; wheelId: string; angle: number }
+
+  /**
+   * Recurs annually on a specific Gregorian calendar date. The single
+   * Gregorian-aware rule kind, in keeping with `src/gregorian.ts` being
+   * the lone Gregorian translation point. Used for events whose
+   * recurrence is best expressed in civil terms — birthdays, anniversaries,
+   * national holidays. See ADR-012.
+   */
+  | { kind: "gregorianDate"; month: number; day: number }
+
+  /**
+   * Composite: occurs each time *any* of the inner rules fires. Lets a
+   * single event be attached to multiple cycles (lunar phase, solar
+   * position, Gregorian date) simultaneously, with each attachment being
+   * its own recurrence pattern. See ADR-013.
+   */
+  | { kind: "anyOf"; rules: PinningRule[] };

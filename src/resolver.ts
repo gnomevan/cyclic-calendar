@@ -1,5 +1,6 @@
 import type { Instant } from "./instant.js";
 import { compareInstants, epochMs, instantFromEpochMs } from "./instant.js";
+import { fromGregorianUTC, toGregorianUTC } from "./gregorian.js";
 import type {
   Anchor,
   AnchorRef,
@@ -300,6 +301,57 @@ export function resolve(
       // computed here. The resolver returns null; callers handling observed
       // events should look up logged observations directly.
       return null;
+    }
+
+    case "atAngle": {
+      const wheel = ctx.registry.get(rule.wheelId);
+      if (!wheel) throw new Error(`Unknown wheel: ${rule.wheelId}`);
+      const at = wheel.nextCrossing(rule.angle, ctx.from, ctx.observer);
+      return at ? { at } : null;
+    }
+
+    case "gregorianDate": {
+      // Find the next noon-UTC moment whose Gregorian month/day matches
+      // the rule. Choosing noon keeps the resolution unambiguous across
+      // time zones near midnight without committing to a particular zone.
+      const fromG = toGregorianUTC(ctx.from);
+      let year = fromG.year;
+      const candidate = fromGregorianUTC({
+        year,
+        month: rule.month,
+        day: rule.day,
+        hour: 12,
+        minute: 0,
+        second: 0,
+      });
+      if (epochMs(candidate) > epochMs(ctx.from)) {
+        return { at: candidate };
+      }
+      // Past for this year; roll to next year.
+      year += 1;
+      const next = fromGregorianUTC({
+        year,
+        month: rule.month,
+        day: rule.day,
+        hour: 12,
+        minute: 0,
+        second: 0,
+      });
+      return { at: next };
+    }
+
+    case "anyOf": {
+      // The earliest occurrence across the inner rules. If all return
+      // null, this rule returns null too.
+      let earliest: ResolvedOccurrence | null = null;
+      for (const inner of rule.rules) {
+        const r = resolve(inner, ctx);
+        if (r === null) continue;
+        if (earliest === null || epochMs(r.at) < epochMs(earliest.at)) {
+          earliest = r;
+        }
+      }
+      return earliest;
     }
   }
 }

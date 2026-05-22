@@ -124,6 +124,40 @@ export function validatePinningRule(value: unknown): PinningRule {
         wheelId: value.wheelId,
         observationKey: value.observationKey,
       };
+    case "atAngle":
+      if (typeof value.wheelId !== "string") {
+        throw new SerializationError("atAngle.wheelId must be a string");
+      }
+      if (typeof value.angle !== "number" || !Number.isFinite(value.angle)) {
+        throw new SerializationError("atAngle.angle must be a finite number");
+      }
+      return { kind: "atAngle", wheelId: value.wheelId, angle: value.angle };
+    case "gregorianDate":
+      if (
+        typeof value.month !== "number" ||
+        !Number.isInteger(value.month) ||
+        value.month < 1 ||
+        value.month > 12
+      ) {
+        throw new SerializationError("gregorianDate.month must be an integer 1..12");
+      }
+      if (
+        typeof value.day !== "number" ||
+        !Number.isInteger(value.day) ||
+        value.day < 1 ||
+        value.day > 31
+      ) {
+        throw new SerializationError("gregorianDate.day must be an integer 1..31");
+      }
+      return { kind: "gregorianDate", month: value.month, day: value.day };
+    case "anyOf":
+      if (!Array.isArray(value.rules) || value.rules.length === 0) {
+        throw new SerializationError("anyOf.rules must be a non-empty array");
+      }
+      return {
+        kind: "anyOf",
+        rules: value.rules.map((r) => validatePinningRule(r)),
+      };
     default:
       throw new SerializationError(`Unknown PinningRule kind: ${String(value.kind)}`);
   }
