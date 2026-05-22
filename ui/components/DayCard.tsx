@@ -5,26 +5,32 @@ import {
   type Instant,
 } from "../../src/index.js";
 import { setEditingEventId, startCreatingFromDay } from "../editing.js";
+import { setFocus } from "../focus.js";
 import { MoonGlyph } from "./MoonGlyph.js";
 
 /**
  * DayCard — landscape day cell sized so that adjacent cards along the
  * front of the moonth ring sit flush against each other.
  *
- * Top row: moon glyph · day-in-moonth · stacked "MON / DD" Gregorian.
- * Body: up to 3 real event occurrences for the day, with times in the
- * user's local timezone. Empty days render no body rows so the card
- * visibly says "nothing here." Days with more than 3 events get an
- * "+N" indicator on the third line.
+ * Click semantics:
+ *   - Clicking the card body when *not focused* → rotate the wheel to
+ *     bring this card to the bottom-center. No form opens.
+ *   - Clicking the body when *already focused* → open the create form
+ *     pre-seeded with this day's cycles.
+ *   - Clicking an event row → focus the card AND open that event in
+ *     the edit form.
+ *
+ * Visual flags:
+ *   - `variant`: ring-level color tone (focus / neighbor-near / -far).
+ *   - `isFocus`: true if this is the card the wheel is currently
+ *     rotated onto. Warm accent border.
+ *   - `isToday`: true if this card represents today's actual date,
+ *     independent of focus. Soft glow outline so the user can always
+ *     find today even after navigating away.
  */
 
 export type DayCardVariant = "focus" | "neighbor-near" | "neighbor-far";
 
-/**
- * A resolved event occurrence for a specific day — the event itself
- * plus the exact instant on which it falls. Sorted by `at` ascending
- * before display.
- */
 export interface DayEventOccurrence {
   event: CalendarEvent;
   at: Instant;
@@ -35,30 +41,35 @@ const MAX_VISIBLE_EVENTS = 3;
 interface DayCardProps {
   /** Day number within the moonth (1..28). */
   moonthDay: number;
+  /** Which moonth this card belongs to, as offset from today's moonth. */
+  moonthOffset: number;
   /** Phase angle of the moon at this day, degrees [0, 360). */
   moonAngle: number;
   /** The Gregorian date this card represents. */
   at: Instant;
-  /** Whether this card is today. */
+  /** True if this card is the currently focused (bottom-center) one. */
+  isFocus?: boolean;
+  /** True if this card represents today's actual date. */
   isToday?: boolean;
-  /** Events for this day, with their resolved occurrence times. */
+  /** Events for this day. */
   events: DayEventOccurrence[];
   /** Pixel width. Default 105 — set so cards bump at the front. */
   width?: number;
-  /** Color variant. */
+  /** Ring-level color variant. */
   variant?: DayCardVariant;
 }
 
 export function DayCard({
   moonthDay,
+  moonthOffset,
   moonAngle,
   at,
+  isFocus = false,
   isToday = false,
   events,
   width = 105,
   variant = "focus",
 }: DayCardProps) {
-  // Golden-ratio portrait card.
   const height = Math.round(width * 1.618);
   const g = toGregorianUTC(at);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -67,15 +78,30 @@ export function DayCard({
   const greDay = pad(g.day);
 
   const classes = ["day-card", `day-card-${variant}`];
+  if (isFocus) classes.push("day-card-focused");
   if (isToday) classes.push("day-card-today");
 
   const visible = events.slice(0, MAX_VISIBLE_EVENTS);
   const overflow = events.length - visible.length;
 
-  function handleEmptyClick(e: React.MouseEvent<HTMLDivElement>) {
-    // Avoid triggering when the click landed on an existing event button.
+  function focusThisCard() {
+    setFocus({ moonthOffset, day: moonthDay });
+  }
+
+  function handleBodyClick(e: React.MouseEvent<HTMLDivElement>) {
+    // Click on an existing event button shouldn't trigger create.
     if ((e.target as HTMLElement).closest(".day-card-event-btn")) return;
-    startCreatingFromDay(at);
+    if (isFocus) {
+      // Already focused — second click commits to creation.
+      startCreatingFromDay(at);
+    } else {
+      focusThisCard();
+    }
+  }
+
+  function handleEventClick(eventId: string) {
+    if (!isFocus) focusThisCard();
+    setEditingEventId(eventId);
   }
 
   return (
@@ -90,8 +116,8 @@ export function DayCard({
       </div>
       <div
         className="day-card-body"
-        onClick={handleEmptyClick}
-        title="Click to add an event on this day"
+        onClick={handleBodyClick}
+        title={isFocus ? "Click to add an event here" : "Click to focus this day"}
       >
         {events.length === 0 ? (
           <div className="day-card-empty" aria-hidden="true" />
@@ -103,7 +129,7 @@ export function DayCard({
                   type="button"
                   className="day-card-event-btn"
                   title={event.description ?? event.name}
-                  onClick={() => setEditingEventId(event.id)}
+                  onClick={() => handleEventClick(event.id)}
                 >
                   <time>{formatTime(occurrenceAt)}</time>
                   <span className="day-card-event-name">{event.name}</span>

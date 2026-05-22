@@ -39,8 +39,16 @@ const OPACITY_MIN = 0.32;
 export interface MoonthRingProps {
   /** Instant at the start of this moonth (the new moon). */
   moonthStart: Instant;
+  /** Moonth's offset from today's moonth. 0 = current. Negative = past. */
+  moonthOffset: number;
   /** Day-of-moonth (1..28) to place at the bottom-center of the ring. */
   focusDay: number;
+  /**
+   * If this ring contains today, the day-of-moonth that today is.
+   * null otherwise. Used so the "today" glow can travel between rings
+   * (or disappear) as the user navigates the stack.
+   */
+  todayMoonthDay: number | null;
   /** Visual variant — drives color treatment. */
   variant: DayCardVariant;
   /** User events to plot on day cards. */
@@ -53,7 +61,9 @@ export interface MoonthRingProps {
 
 export function MoonthRing({
   moonthStart,
+  moonthOffset,
   focusDay,
+  todayMoonthDay,
   variant,
   events,
   width,
@@ -130,8 +140,9 @@ export function MoonthRing({
 
       <div className="moonth-ring-cards">
         {placed.map(({ day, x, y, scale, opacity }) => {
-          const today = variant === "focus" && day.moonthDay === focusDay;
-          const cardVariant: DayCardVariant = today ? "focus" : variant;
+          const isFocus = variant === "focus" && day.moonthDay === focusDay;
+          const isToday =
+            todayMoonthDay !== null && day.moonthDay === todayMoonthDay;
           return (
             <div
               key={day.moonthDay}
@@ -146,12 +157,14 @@ export function MoonthRing({
             >
               <DayCard
                 moonthDay={day.moonthDay}
+                moonthOffset={moonthOffset}
                 moonAngle={day.moonAngle}
                 at={day.at}
-                isToday={today}
+                isFocus={isFocus}
+                isToday={isToday}
                 events={eventsByDay.get(day.moonthDay) ?? []}
                 width={CARD_WIDTH}
-                variant={cardVariant}
+                variant={variant}
               />
             </div>
           );

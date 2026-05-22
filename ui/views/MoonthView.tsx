@@ -15,6 +15,7 @@ import {
 } from "../components/MoonthRing.js";
 import { SolarYearTrack } from "../components/SolarYearTrack.js";
 import { findRecentNewMoon } from "../components/ConcentricOverview.js";
+import { ensureFocus, useFocus } from "../focus.js";
 import { useEvents } from "../store.js";
 
 /**
@@ -126,15 +127,24 @@ export function MoonthView() {
 
   const currentMoonthStart = useMemo(() => findRecentNewMoon(nowInstant), [nowInstant]);
 
-  // Today's day-in-moonth (1..28). Every ring uses this same focus
-  // day at its bottom — so reading vertically across rings shows
-  // "this same lunar phase position, N moonths ago/ahead".
-  const focusDay = useMemo(() => {
+  // Today's day-in-moonth (1..28) — used both as the default focus
+  // day on first load and as the "today glow" target.
+  const todayMoonthDay = useMemo(() => {
     const dayIndex = Math.floor(
       (epochMs(nowInstant) - epochMs(currentMoonthStart)) / 86_400_000,
     );
     return Math.max(1, Math.min(28, dayIndex + 1));
   }, [nowInstant, currentMoonthStart]);
+
+  // Initialize the focus the first time we render, then let user clicks
+  // drive it.
+  useEffect(() => {
+    ensureFocus({ moonthOffset: 0, day: todayMoonthDay });
+  }, [todayMoonthDay]);
+
+  const focus = useFocus();
+  const focusedMoonthOffset = focus?.moonthOffset ?? 0;
+  const focusedDay = focus?.day ?? todayMoonthDay;
 
   // Use the module-level RING_OFFSETS so we don't recompute per render.
   const ringOffsets = RING_OFFSETS;
@@ -162,24 +172,36 @@ export function MoonthView() {
           className="moonth-stack"
           style={{ width: RING_WIDTH, height: STACK_HEIGHT }}
         >
-          {ringOffsets.map((offset) => {
-            const moonthStart = moonthStartFromOffset(currentMoonthStart, offset);
+          {ringOffsets.map((relativeOffset) => {
+            // `relativeOffset` is the ring's position in the stack
+            // (-2..+2). `absoluteOffset` is how many moonths from
+            // *today's* moonth this ring actually represents. Keying
+            // by absoluteOffset means React keeps the same DOM node
+            // for a given moonth across focus changes, so CSS
+            // transitions on top/transform fire smoothly when the
+            // stack rotates.
+            const absoluteOffset = focusedMoonthOffset + relativeOffset;
+            const moonthStart = moonthStartFromOffset(
+              currentMoonthStart,
+              absoluteOffset,
+            );
             const variant =
-              offset === 0 ? "focus" :
-              Math.abs(offset) === 1 ? "neighbor-near" :
+              relativeOffset === 0 ? "focus" :
+              Math.abs(relativeOffset) === 1 ? "neighbor-near" :
               "neighbor-far";
-            const stackScale = scaleForOffset(offset);
-            // Variable spacing: ring center positions are precomputed
-            // so adjacent rings exactly touch (no gap, no overlap)
-            // regardless of which scales are at the boundary.
-            const ringCenterY = FOCUS_STACK_Y + ringCenterOffset(offset);
+            const stackScale = scaleForOffset(relativeOffset);
+            const ringCenterY = FOCUS_STACK_Y + ringCenterOffset(relativeOffset);
             const ringTop = ringCenterY - RING_HEIGHT / 2;
             const moonthEndExclusive = instantFromEpochMs(
               epochMs(moonthStart) + 28 * 86_400_000,
             );
+            // The "today glow" appears only on the ring that
+            // contains today (absoluteOffset === 0). For all other
+            // rings, the glow target is null.
+            const todayInThisRing = absoluteOffset === 0 ? todayMoonthDay : null;
             return (
               <div
-                key={offset}
+                key={absoluteOffset}
                 className="moonth-ring-slot"
                 style={{
                   top: ringTop,
@@ -192,9 +214,9 @@ export function MoonthView() {
               >
                 <div className="moonth-ring-label">
                   <span className="moonth-ring-offset">
-                    {offset === 0 ? "this moonth" :
-                     offset < 0 ? `${-offset} moonth${offset === -1 ? "" : "s"} ago` :
-                     `${offset} moonth${offset === 1 ? "" : "s"} ahead`}
+                    {absoluteOffset === 0 ? "this moonth" :
+                     absoluteOffset < 0 ? `${-absoluteOffset} moonth${absoluteOffset === -1 ? "" : "s"} ago` :
+                     `${absoluteOffset} moonth${absoluteOffset === 1 ? "" : "s"} ahead`}
                   </span>
                   <span className="moonth-ring-dates">
                     {formatShort(moonthStart)} – {formatShort(
@@ -204,7 +226,9 @@ export function MoonthView() {
                 </div>
                 <MoonthRing
                   moonthStart={moonthStart}
-                  focusDay={focusDay}
+                  moonthOffset={absoluteOffset}
+                  focusDay={focusedDay}
+                  todayMoonthDay={todayInThisRing}
                   variant={variant}
                   events={events}
                   width={RING_WIDTH}

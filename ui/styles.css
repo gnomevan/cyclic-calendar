@@ -542,7 +542,10 @@ main {
 
 .moonth-ring-slot {
   position: absolute;
-  transition: transform 0.35s ease;
+  transition:
+    top 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: top, transform;
 }
 
 .moonth-ring-label {
@@ -588,8 +591,12 @@ main {
 .moonth-card-slot {
   position: absolute;
   transform-origin: center center;
-  transition: transform 0.4s ease, opacity 0.4s ease;
-  will-change: transform, opacity;
+  transition:
+    left 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    top 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.45s ease;
+  will-change: left, top, transform, opacity;
 }
 
 .moonth-ring-neighbor-near {
@@ -636,9 +643,24 @@ main {
   background: #0a0d12;
 }
 
-.day-card-today {
+/* Focused card — the one rotated to the bottom-center. Warm accent
+   border so the user always knows which day is currently selected. */
+.day-card-focused {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 1px var(--accent), 0 0 12px rgba(212, 163, 115, 0.25);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Today's card — independent of focus. Soft glow outline that
+   travels with today as the user navigates. When today is also the
+   focused card, the focused border layers on top. */
+.day-card-today {
+  box-shadow: 0 0 0 1px rgba(212, 163, 115, 0.55),
+              0 0 18px rgba(212, 163, 115, 0.35);
+}
+
+.day-card-today.day-card-focused {
+  box-shadow: 0 0 0 1px var(--accent),
+              0 0 18px rgba(212, 163, 115, 0.45);
 }
 
 .day-card-head {
@@ -675,7 +697,7 @@ main {
   color: #6a7c8e;
 }
 
-.day-card-today .day-card-number {
+.day-card-focused .day-card-number {
   color: var(--accent);
 }
 
