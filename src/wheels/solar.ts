@@ -54,4 +54,23 @@ export const solarWheel: Wheel = {
     }
     return dateToInstant(result.date);
   },
+
+  previousCrossing(targetAngle: Angle, before: Instant): Instant | null {
+    // The sun reaches any given ecliptic longitude once per year. To
+    // find the most recent crossing strictly before `before`, walk a
+    // forward search from one full cycle earlier and take the latest
+    // result that lands before `before`.
+    const beforeMs = epochMs(before);
+    let cursor = new Date(beforeMs - 1.5 * 365.25 * 86_400_000);
+    let latest: Date | null = null;
+    for (let i = 0; i < 3; i++) {
+      const result = SearchSunLongitude(targetAngle, cursor, 370);
+      if (!result) break;
+      const ms = result.date.getTime();
+      if (ms >= beforeMs) break;
+      latest = result.date;
+      cursor = new Date(ms + 1000);
+    }
+    return latest ? dateToInstant(latest) : null;
+  },
 };

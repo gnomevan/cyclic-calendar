@@ -65,6 +65,29 @@ describe("solar wheel", () => {
     expect(g.day).toBeGreaterThanOrEqual(20);
     expect(g.day).toBeLessThanOrEqual(22);
   });
+
+  it("previousCrossing: finds the most recent winter solstice before REF (Jan 1 2026)", () => {
+    const at = solarWheel.previousCrossing(270, REF);
+    expect(at).not.toBeNull();
+    // Should be ~Dec 21, 2025.
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2025);
+    expect(g.month).toBe(12);
+    expect(g.day).toBeGreaterThanOrEqual(20);
+    expect(g.day).toBeLessThanOrEqual(22);
+    // And strictly before REF.
+    expect(at!).toBeLessThan(REF);
+  });
+
+  it("previousCrossing: finds the most recent spring equinox before REF", () => {
+    const at = solarWheel.previousCrossing(0, REF);
+    expect(at).not.toBeNull();
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2025);
+    expect(g.month).toBe(3);
+    expect(g.day).toBeGreaterThanOrEqual(19);
+    expect(g.day).toBeLessThanOrEqual(21);
+  });
 });
 
 describe("lunar wheel", () => {
@@ -83,6 +106,16 @@ describe("lunar wheel", () => {
     const days = (at! - REF) / 86_400_000;
     expect(days).toBeGreaterThan(0);
     expect(days).toBeLessThan(35);
+  });
+
+  it("previousCrossing: finds the most recent full moon before REF", () => {
+    const at = lunarWheel.previousCrossing(180, REF);
+    expect(at).not.toBeNull();
+    // Within one synodic cycle before REF.
+    const days = (REF - at!) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(days).toBeLessThan(35);
+    expect(at!).toBeLessThan(REF);
   });
 });
 
@@ -382,6 +415,16 @@ describe("Pleiades wheel", () => {
     };
     const result = resolve(rule, ctx());
     expect(result).not.toBeNull();
+  });
+
+  it("previousCrossing: finds the most recent acronychal rising before REF", () => {
+    const at = pleiadesWheel.previousCrossing(180, REF);
+    expect(at).not.toBeNull();
+    // Pleiades opposition occurs ~once per year. Should be ~Nov 2025.
+    const g = toGregorianUTC(at!);
+    expect(g.year).toBe(2025);
+    expect(g.month).toBe(11);
+    expect(at!).toBeLessThan(REF);
   });
 });
 

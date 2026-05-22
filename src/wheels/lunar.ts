@@ -49,4 +49,22 @@ export const lunarWheel: Wheel = {
     }
     return dateToInstant(result.date);
   },
+
+  previousCrossing(targetAngle: Angle, before: Instant): Instant | null {
+    // The moon reaches any given phase angle once per synodic month
+    // (~29.5 days). Walk a forward search from ~1.5 cycles earlier and
+    // take the latest crossing that lands strictly before `before`.
+    const beforeMs = epochMs(before);
+    let cursor = new Date(beforeMs - 1.5 * 29.53 * 86_400_000);
+    let latest: Date | null = null;
+    for (let i = 0; i < 3; i++) {
+      const result = SearchMoonPhase(targetAngle, cursor, 35);
+      if (!result) break;
+      const ms = result.date.getTime();
+      if (ms >= beforeMs) break;
+      latest = result.date;
+      cursor = new Date(ms + 1000);
+    }
+    return latest ? dateToInstant(latest) : null;
+  },
 };

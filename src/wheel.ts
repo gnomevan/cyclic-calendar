@@ -70,6 +70,19 @@ export interface Wheel {
     after: Instant,
     observer?: Location,
   ): Instant | null;
+
+  /**
+   * The latest instant strictly before `before` at which the wheel reaches
+   * `targetAngle`. The mirror of `nextCrossing`; together they let callers
+   * walk a wheel's crossings in either temporal direction — required for
+   * a calendar view that scrolls into the past as freely as the future.
+   * For observational wheels, may return null if no estimate is possible.
+   */
+  previousCrossing(
+    targetAngle: Angle,
+    before: Instant,
+    observer?: Location,
+  ): Instant | null;
 }
 
 /* ------------------------------------------------------------------------- *

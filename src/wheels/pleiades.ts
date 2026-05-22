@@ -85,6 +85,27 @@ export const pleiadesWheel: Wheel = {
     }
     return dateToInstant(result.date);
   },
+
+  previousCrossing(targetAngle: Angle, before: Instant): Instant | null {
+    // Mirrors nextCrossing but searches backward by walking forward
+    // from ~1.5 years earlier and taking the latest crossing before
+    // `before`.
+    const targetSunLon = normalizeAngle(
+      PLEIADES_ECLIPTIC_LON_J2000 + targetAngle,
+    );
+    const beforeMs = epochMs(before);
+    let cursor = new Date(beforeMs - 1.5 * 365.25 * 86_400_000);
+    let latest: Date | null = null;
+    for (let i = 0; i < 3; i++) {
+      const result = SearchSunLongitude(targetSunLon, cursor, 370);
+      if (!result) break;
+      const ms = result.date.getTime();
+      if (ms >= beforeMs) break;
+      latest = result.date;
+      cursor = new Date(ms + 1000);
+    }
+    return latest ? dateToInstant(latest) : null;
+  },
 };
 
 /**
