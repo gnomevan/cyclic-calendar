@@ -1,10 +1,14 @@
 import { useMemo } from "react";
 import {
+  WESTERN_SIGNS,
+  ayanamsa,
   epochMs,
   instantFromEpochMs,
+  normalizeAngle,
   solarWheel,
   toGregorianUTC,
   type Instant,
+  type WesternSign,
 } from "../../src/index.js";
 
 /**
@@ -65,6 +69,11 @@ export function SolarYearTrack({
     [referenceInstant, halfRangeDays],
   );
 
+  const zodiacEntries = useMemo(
+    () => collectZodiacEntries(referenceInstant, halfRangeDays),
+    [referenceInstant, halfRangeDays],
+  );
+
   // Convert ms → y position on the track. Center is at the
   // referenceInstant (= the focused day's instant), so the track
   // follows the user's navigation through time. The "now" marker
@@ -118,7 +127,7 @@ export function SolarYearTrack({
           );
         })}
 
-        {/* Solar anchor marks */}
+        {/* Solar anchor marks (8 Celtic cross-quarters) */}
         {anchors.map((a) => {
           const y = a.yFrac * height;
           if (y < 0 || y > height) return null;
@@ -135,6 +144,37 @@ export function SolarYearTrack({
                 fontFamily="ui-sans-serif, system-ui, sans-serif"
               >
                 {a.label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Zodiac sign entries — the 12 sun-in-sign boundaries
+            (sidereal). Coexist with the 8 anchors above. Shown on the
+            opposite side of the spine and colored per the sign's
+            traditional color so they read as a separate palette. */}
+        {zodiacEntries.map((z) => {
+          const y = z.yFrac * height;
+          if (y < 0 || y > height) return null;
+          return (
+            <g key={z.id}>
+              <line
+                x1={width / 2 - 6} y1={y}
+                x2={width / 2 + 6} y2={y}
+                stroke={z.sign.colorHex}
+                strokeWidth={1}
+                opacity={0.7}
+              />
+              <text
+                x={width / 2 - 14}
+                y={y + 4}
+                textAnchor="end"
+                fontSize="14"
+                fill={z.sign.colorHex}
+                fontFamily="ui-sans-serif, system-ui, sans-serif"
+              >
+                <title>{`Sun enters ${z.sign.name}`}</title>
+                {z.sign.symbol}
               </text>
             </g>
           );
@@ -200,6 +240,58 @@ export function SolarYearTrack({
       </svg>
     </div>
   );
+}
+
+interface ZodiacEntry {
+  id: string;
+  sign: WesternSign;
+  yFrac: number;
+  ms: number;
+}
+
+/**
+ * The 12 sun-enters-sign boundaries within the visible date range.
+ * The sun's sidereal longitude is its of-date tropical longitude minus
+ * the ayanamsa; "sun enters Aries" (sidereal) thus means the tropical
+ * longitude crosses (0° + ayanamsa). Approximating the ayanamsa as
+ * constant within the visible window (it drifts only ~0.014°/year) is
+ * accurate to well within a day for these crossings.
+ */
+function collectZodiacEntries(
+  referenceInstant: Instant,
+  halfRangeDays: number,
+): ZodiacEntry[] {
+  const dayMs = 86_400_000;
+  const referenceMs = epochMs(referenceInstant);
+  const startMs = referenceMs - halfRangeDays * dayMs;
+  const endMs = referenceMs + halfRangeDays * dayMs;
+  const ay = ayanamsa(referenceInstant);
+
+  const out: ZodiacEntry[] = [];
+  const start = instantFromEpochMs(startMs);
+
+  for (const sign of WESTERN_SIGNS) {
+    const tropicalTarget = normalizeAngle(sign.index * 30 + ay);
+    let cursor = start;
+    // Each sign is crossed once per year; iterate up to 2 to handle
+    // ranges that wrap past a year.
+    for (let i = 0; i < 2; i++) {
+      const next = solarWheel.nextCrossing(tropicalTarget, cursor);
+      if (next === null) break;
+      const ms = epochMs(next);
+      if (ms > endMs) break;
+      if (ms >= startMs) {
+        out.push({
+          id: `${sign.id}-${ms}`,
+          sign,
+          yFrac: 0.5 + (ms - referenceMs) / (halfRangeDays * 2 * dayMs),
+          ms,
+        });
+      }
+      cursor = next;
+    }
+  }
+  return out;
 }
 
 function collectAnchors(referenceInstant: Instant, halfRangeDays: number): AnchorMark[] {

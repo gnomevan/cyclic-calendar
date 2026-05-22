@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   epochMs,
   instantFromEpochMs,
+  lunarSiderealWheel,
   lunarWheel,
   resolve,
   toGregorianUTC,
@@ -97,6 +98,7 @@ export function MoonthRing({
       return {
         at,
         moonAngle: lunarWheel.positionAt(at),
+        moonSiderealAngle: lunarSiderealWheel.positionAt(at),
         moonthDay: i + 1,
       };
     });
@@ -174,6 +176,7 @@ export function MoonthRing({
                 moonthDay={day.moonthDay}
                 moonthOffset={moonthOffset}
                 moonAngle={day.moonAngle}
+                moonSiderealAngle={day.moonSiderealAngle}
                 at={day.at}
                 isFocus={isFocus}
                 isToday={isToday}
@@ -194,6 +197,7 @@ export function MoonthRing({
 interface DayInfo {
   at: Instant;
   moonAngle: number;
+  moonSiderealAngle: number;
   moonthDay: number;
 }
 

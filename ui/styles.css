@@ -696,6 +696,21 @@ main {
   flex: 0 0 auto;
 }
 
+/* The moon-phase glyph and the zodiac-sign glyph sit together in
+   one cluster — moon-shape (what the moon looks like) and Vedic-
+   sidereal sign symbol (where the moon is). Distinct by form. */
+.day-card-moon-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+.zodiac-glyph {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  user-select: none;
+}
+
 .day-card-number {
   flex: 1;
   text-align: center;

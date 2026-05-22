@@ -7,6 +7,7 @@ import {
 import { setEditingEventId, startCreatingFromDay } from "../editing.js";
 import { setFocus } from "../focus.js";
 import { MoonGlyph } from "./MoonGlyph.js";
+import { ZodiacGlyph } from "./ZodiacGlyph.js";
 
 /**
  * DayCard — landscape day cell sized so that adjacent cards along the
@@ -43,8 +44,14 @@ interface DayCardProps {
   moonthDay: number;
   /** Which moonth this card belongs to, as offset from today's moonth. */
   moonthOffset: number;
-  /** Phase angle of the moon at this day, degrees [0, 360). */
+  /** Synodic phase angle (sun-relative) at this day, degrees [0, 360). */
   moonAngle: number;
+  /**
+   * Moon's sidereal ecliptic longitude at this day, degrees [0, 360).
+   * Used for the zodiac glyph next to the phase glyph — answers
+   * "what sign is the moon in" alongside "what does the moon look like."
+   */
+  moonSiderealAngle: number;
   /** The Gregorian date this card represents. */
   at: Instant;
   /** True if this card is the currently focused (bottom-center) one. */
@@ -63,6 +70,7 @@ export function DayCard({
   moonthDay,
   moonthOffset,
   moonAngle,
+  moonSiderealAngle,
   at,
   isFocus = false,
   isToday = false,
@@ -107,7 +115,10 @@ export function DayCard({
   return (
     <div className={classes.join(" ")} style={{ width, height }}>
       <div className="day-card-head">
-        <MoonGlyph angle={moonAngle} size={22} />
+        <span className="day-card-moon-cluster">
+          <MoonGlyph angle={moonAngle} size={22} />
+          <ZodiacGlyph angle={moonSiderealAngle} size={14} />
+        </span>
         <span className="day-card-number">{moonthDay}</span>
         <div className="day-card-greg">
           <span className="day-card-greg-month">{greMonth}</span>
