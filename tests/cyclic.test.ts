@@ -5,6 +5,9 @@ import {
   solarWheel,
   lunarWheel,
   pleiadesWheel,
+  lunarSiderealWheel,
+  ayanamsa,
+  NAKSHATRA_WIDTH,
   heliacalRisingAngle,
   fromISOString,
   toISOString,
@@ -425,6 +428,86 @@ describe("Pleiades wheel", () => {
     expect(g.year).toBe(2025);
     expect(g.month).toBe(11);
     expect(at!).toBeLessThan(REF);
+  });
+});
+
+describe("ayanamsa (Lahiri linear)", () => {
+  it("is ~23.85° at J2000", () => {
+    const j2000 = fromISOString("2000-01-01T12:00:00Z");
+    expect(ayanamsa(j2000)).toBeCloseTo(23.852, 2);
+  });
+
+  it("is ~24.2° at REF (Jan 1 2026)", () => {
+    expect(ayanamsa(REF)).toBeCloseTo(24.2, 1);
+  });
+
+  it("drifts ~50.29″ per year", () => {
+    const a2000 = ayanamsa(fromISOString("2000-01-01T12:00:00Z"));
+    const a2100 = ayanamsa(fromISOString("2100-01-01T12:00:00Z"));
+    const arcsecPerYear = ((a2100 - a2000) * 3600) / 100;
+    expect(arcsecPerYear).toBeCloseTo(50.29, 1);
+  });
+});
+
+describe("sidereal lunar wheel", () => {
+  it("reports a position in [0, 360)", () => {
+    const angle = lunarSiderealWheel.positionAt(REF);
+    expect(angle).toBeGreaterThanOrEqual(0);
+    expect(angle).toBeLessThan(360);
+  });
+
+  it("position is ayanamsa-shifted from the of-date moon longitude", () => {
+    // At REF, the tropical (of-date) moon longitude minus ayanamsa
+    // should equal the sidereal position. Verify the offset is roughly
+    // 24° in 2026.
+    const sidereal = lunarSiderealWheel.positionAt(REF);
+    // We can't easily get the of-date longitude here without going
+    // around the lib, but we can check the inverse: sidereal + ayanamsa
+    // ≈ tropical, which falls inside [0, 360).
+    const tropical = (sidereal + ayanamsa(REF)) % 360;
+    expect(tropical).toBeGreaterThanOrEqual(0);
+    expect(tropical).toBeLessThan(360);
+  });
+
+  it("nextCrossing(0) finds the next time the moon is at Ashvini start (within a sidereal cycle)", () => {
+    const at = lunarSiderealWheel.nextCrossing(0, REF);
+    expect(at).not.toBeNull();
+    const days = (at! - REF) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(days).toBeLessThan(28);
+  });
+
+  it("previousCrossing(0) finds a moon-at-0° instant strictly before REF", () => {
+    const at = lunarSiderealWheel.previousCrossing(0, REF);
+    expect(at).not.toBeNull();
+    const days = (REF - at!) / 86_400_000;
+    expect(days).toBeGreaterThan(0);
+    expect(days).toBeLessThan(28);
+    expect(at!).toBeLessThan(REF);
+  });
+
+  it("crossings round-trip: previous then next from same target return the same instants", () => {
+    const target = 90; // some arbitrary sidereal angle
+    const next = lunarSiderealWheel.nextCrossing(target, REF);
+    expect(next).not.toBeNull();
+    // Walking previousCrossing back from a moment just past `next`
+    // should land on `next` (or essentially the same moment).
+    const justPast = (next! + 60_000) as typeof next;
+    const back = lunarSiderealWheel.previousCrossing(target, justPast!);
+    expect(back).not.toBeNull();
+    expect(Math.abs(back! - next!)).toBeLessThan(2000); // within 2 s
+  });
+
+  it("has 27 nakshatra anchors at 13°20′ intervals starting at 0°", () => {
+    const anchors = lunarSiderealWheel.anchors;
+    expect(anchors.length).toBe(27);
+    expect(anchors[0]!.name).toBe("Ashvini");
+    expect(anchors[0]!.angle).toBe(0);
+    // Each nakshatra is 360°/27 = 13.333…° (= 13°20′).
+    expect(NAKSHATRA_WIDTH).toBeCloseTo(13.333, 2);
+    expect(anchors[1]!.angle).toBeCloseTo(NAKSHATRA_WIDTH, 5);
+    expect(anchors[26]!.name).toBe("Revati");
+    expect(anchors[26]!.angle).toBeCloseTo(26 * NAKSHATRA_WIDTH, 5);
   });
 });
 

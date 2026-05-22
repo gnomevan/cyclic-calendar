@@ -62,6 +62,12 @@ export {
   heliacalRisingAngle,
   heliacalSettingAngle,
 } from "./wheels/pleiades.js";
+export {
+  lunarSiderealWheel,
+  LUNAR_SIDEREAL_ANCHORS,
+  NAKSHATRA_WIDTH,
+  ayanamsa,
+} from "./wheels/lunar_sidereal.js";
 
 // Serialization (boundary between trusted PinningRule values and untrusted JSON)
 export {

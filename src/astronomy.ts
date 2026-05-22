@@ -36,3 +36,20 @@ export const SearchMoonPhase: (
   startDate: Date,
   limitDays: number,
 ) => { date: Date } | null = Astronomy.SearchMoonPhase;
+
+/**
+ * Geocentric ecliptic position of the Moon at a given date.
+ *
+ * Used by the sidereal lunar wheel as the underlying primitive for
+ * computing the moon's of-date ecliptic longitude. Note: astronomy-
+ * engine's generic `EclipticLongitude(body, time)` returns
+ * *heliocentric* longitude — for the Moon that's just Earth's
+ * barycenter motion (~1°/day), not the geocentric longitude we want
+ * (~13.2°/day). `EclipticGeoMoon` is the right primitive for moon
+ * position as seen from Earth.
+ */
+export const EclipticGeoMoon: (date: Date) => {
+  lat: number;
+  lon: number;
+  dist: number;
+} = Astronomy.EclipticGeoMoon;
