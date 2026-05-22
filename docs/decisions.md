@@ -605,3 +605,132 @@ constituents.
   use case yet.
 - Performance issues if events accumulate dozens of attached cycles.
   At v1 scale (a handful of attachments per event), this is fine.
+
+---
+
+## ADR-014: Sidereal frame is primary; tropical is a translation layer
+
+**Decided**: The system's lunar-position wheel measures angles in the
+**sidereal** frame — referenced to the actual fixed-star ecliptic
+coordinates, not to the spring equinox. Any tropical Western view, if
+it ever ships, is a translation layer built on top by adding the
+ayanamsa back; it does not replace the core frame.
+
+**Background**: The new sidereal lunar wheel (`src/wheels/lunar_sidereal.ts`)
+reports the moon's of-date ecliptic longitude minus the Lahiri
+ayanamsa. That is the foundation for the helix view's ring geometry,
+the moon-in-sign card glyph, and the nakshatra navigation rhythm.
+Most Western astrology software defaults to the *tropical* frame
+(0° = vernal equinox); the two are currently ~24° apart due to
+precession, and they were aligned only around 285 CE. Mixing them is
+how "Aries" comes to mean two different things (the spring-anchored
+30° slice vs. the constellation Aries itself) in different software.
+
+**Alternatives considered**:
+
+1. Tropical-primary, with sidereal as a translation layer (the
+   default for most Western astrology software). Rejected — see below.
+2. Maintain both as peer primary frames, picked per call. Rejected as
+   needless complexity; the system is opinionated.
+3. No frame at all — just store raw of-date longitudes. Rejected
+   because every consumer (labels, nakshatra anchors, the helix
+   geometry) needs to operate in *some* frame, so we'd just be
+   pushing the decision into every call site.
+
+**Reasoning**:
+
+- The wheel's *culturally consistent* labelings — Vedic nakshatras,
+  Chinese xiu, Arabic manazil, all rounded-28 lunar zodiacs — are
+  sidereal in their original sources. The tropical frame is a
+  Western post-Hipparchus convention that aligned with the sidereal
+  frame two millennia ago and has drifted away since. The 27-fold
+  divisions only mean what they mean *in the sidereal frame*.
+- When the UI labels "moon in Aries," that should mean the moon is
+  in the actual constellation Aries — visible in the sky against
+  those stars — not in the 30° starting at the spring equinox. The
+  former is what users intuitively expect when they look up.
+- The Gregorian / tropical / civil layer is already isolated to its
+  own translation module (ADR-005: `src/gregorian.ts`). Treating the
+  tropical frame the same way — as an optional translation atop the
+  sidereal core — mirrors the architecture's existing seam.
+- Mixing frames within the system (e.g. labeling a sidereal angle
+  with tropical-frame "Aries 5°") is the kind of subtle inconsistency
+  that compounds across modules. Forcing one frame at the core
+  prevents that whole class of bug.
+
+**What changes downstream**:
+
+- The 12-sign Western labels in `src/zodiac.ts` use sidereal
+  boundaries: Aries = 0°-30° sidereal, not 0°-30° tropical.
+- The 27 nakshatra labels use the same sidereal boundaries.
+- The helix view's ring geometry uses the moon's sidereal longitude
+  for card positions.
+- If a tropical Western view ever ships, it must be implemented as
+  an explicit translation: add the ayanamsa back before labels are
+  looked up. It must not change what the core stores or computes.
+
+**Would force a revisit**: a user-facing requirement for the
+tropical frame to be the *system-wide default* (not just a
+translation). That would require explicit deliberation, since it
+contradicts the lunar-zodiac labeling traditions the system is
+trying to honor.
+
+---
+
+## ADR-015: Western and Vedic labels both use sidereal boundaries
+
+**Decided**: The 12 Western sign labels and the 27 Vedic nakshatra
+labels both reference the sidereal frame. There is no separate
+tropical Western labeling in the system. Both palettes, in
+`src/zodiac.ts`, partition the *same* sidereal angle into different
+granularities.
+
+**Background**: A natural assumption when reading the codebase is
+that "Western" = "tropical" and "Vedic" = "sidereal" — the way most
+practitioners distinguish them. We deliberately break that
+convention: both label sets reference the actual constellations.
+
+**Reasoning**:
+
+- The two labelings exist to complement each other at different
+  scales: 12 signs (30° wide each) for at-a-glance familiarity, 27
+  nakshatras (13°20′ each) for finer granularity. Their value as a
+  *layered* labeling depends on both being measured against the
+  same physical reference. If Western was tropical and Vedic was
+  sidereal, they'd disagree by ~24° everywhere — the layered
+  picture would never line up.
+- The Western signs in the Vedic / sidereal frame are not less
+  "Western" — they're the original meaning of those names, before
+  the precession-driven drift relabeled the equinox-anchored slices.
+  "Moon in Aries" then means what it meant in classical antiquity.
+- The wheel measures real sky positions. Labeling those positions
+  with a tropical reference would be mixing frames at the labeling
+  layer — exactly the inconsistency ADR-014 rejects at the data
+  layer.
+
+**Alternatives considered**:
+
+1. Western tropical + Vedic sidereal (the conventional split).
+   Rejected because the two labelings drift apart by ~24° (and
+   growing); the layered display would be incoherent.
+2. Only one palette in the system, picked at runtime. Rejected as
+   losing the complementary information — 12 and 27 partition the
+   circle at different scales and provide different at-a-glance
+   reads.
+3. Western tropical only, drop Vedic. Rejected as forfeiting the
+   finer granularity and the cross-cultural lunar-zodiac tradition.
+
+**Implementation note**: this is the non-obvious decision in the
+zodiac module. A future contributor who assumes Western = tropical
+and tries to "fix" the labels by shifting them by ayanamsa would be
+breaking the system's coherence. The phrasing this ADR records:
+*"Both the Western 12-sign and Vedic 27-nakshatra labeling systems
+use sidereal boundaries — referenced to the actual fixed stars, not
+the equinox-anchored tropical frame. Mixing frames (tropical
+Western on a sidereally-measured wheel) was rejected as internally
+inconsistent. The UI may display a tropical view as a translation
+layer; the core frame is sidereal."*
+
+**Would force a revisit**: a user-facing tropical-Western mode
+becoming part of the product. That would arrive as an explicit
+translation layer in the UI, not as a change to the labeling data.
