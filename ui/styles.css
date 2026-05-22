@@ -514,10 +514,22 @@ main {
 }
 
 .moonth-caption {
-  margin: 0 0 1rem;
+  margin: 0 0 0.4rem;
   color: var(--fg-dim);
   font-size: 0.9rem;
   max-width: 38rem;
+}
+
+.moonth-viewing {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--fg-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.moonth-viewing strong {
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .moonth-layout {
@@ -543,8 +555,8 @@ main {
 .moonth-ring-slot {
   position: absolute;
   transition:
-    top 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    top 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: top, transform;
 }
 
@@ -589,13 +601,15 @@ main {
 }
 
 .moonth-card-slot {
+  /* left/top are driven by JS interpolation of the focused day, so
+     every card traces the arc rather than cutting a chord through the
+     wheel. Only transform/opacity are CSS-animated here so they stay
+     in sync with the JS rotation duration. */
   position: absolute;
   transform-origin: center center;
   transition:
-    left 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    top 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 0.45s ease;
+    transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.7s ease;
   will-change: left, top, transform, opacity;
 }
 

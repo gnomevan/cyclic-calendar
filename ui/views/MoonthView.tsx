@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   epochMs,
   instantFromEpochMs,
@@ -144,7 +144,31 @@ export function MoonthView() {
 
   const focus = useFocus();
   const focusedMoonthOffset = focus?.moonthOffset ?? 0;
-  const focusedDay = focus?.day ?? todayMoonthDay;
+  const targetDay = focus?.day ?? todayMoonthDay;
+
+  // Smoothly animate the focused day so every card on the wheel
+  // traces the actual arc as the wheel rotates, instead of taking the
+  // CSS-default straight-line chord between old and new positions
+  // (which left cards far from the center looking like they barely
+  // moved). 900 ms with ease-in-out feels deliberate without dragging.
+  const focusedDay = useAnimatedDay(targetDay, 900);
+
+  // The focused day's actual instant on the timeline — passed to the
+  // solar year track so the year-spine follows the user's navigation.
+  const focusedMoonthStart = useMemo(
+    () => moonthStartFromOffset(currentMoonthStart, focusedMoonthOffset),
+    [currentMoonthStart, focusedMoonthOffset],
+  );
+  const focusedInstant = useMemo(
+    () =>
+      instantFromEpochMs(
+        epochMs(focusedMoonthStart) + (targetDay - 0.5) * 86_400_000,
+      ),
+    [focusedMoonthStart, targetDay],
+  );
+
+  const isViewingToday =
+    focusedMoonthOffset === 0 && targetDay === todayMoonthDay;
 
   // Use the module-level RING_OFFSETS so we don't recompute per render.
   const ringOffsets = RING_OFFSETS;
@@ -155,10 +179,11 @@ export function MoonthView() {
         <h2>Your year</h2>
         <p className="moonth-caption">
           {STACK_TOTAL_RINGS} moonths stacked along the solar year, viewed as a
-          torus on its side. The focused ring (warm) is the current moonth;
-          rings above are previous moonths, rings below are upcoming. Reading
-          vertically through the rings at any column gives you the same lunar
-          phase across cycles.
+          torus on its side. Click any card to spin it into focus.
+        </p>
+        <p className="moonth-viewing">
+          Viewing: <strong>{formatShort(focusedInstant)}</strong>
+          {isViewingToday ? " (today)" : null}
         </p>
       </header>
 
@@ -166,6 +191,8 @@ export function MoonthView() {
         <SolarYearTrack
           height={STACK_HEIGHT}
           halfRangeDays={TRACK_HALF_RANGE_DAYS}
+          referenceInstant={focusedInstant}
+          nowInstant={nowInstant}
         />
 
         <div
@@ -246,4 +273,55 @@ export function MoonthView() {
       </p>
     </section>
   );
+}
+
+/* ----- focus-day animation -------------------------------------------- *
+ *
+ *  When focus.day changes, every card on every ring needs to rotate
+ *  along the rim to its new position. CSS left/top transitions would
+ *  interpolate position linearly — i.e., cards would cut chords through
+ *  the inside of the wheel rather than tracing the arc. We instead
+ *  interpolate the focus day itself in JS over the animation duration;
+ *  each frame, MoonthRing re-renders with a slightly different
+ *  focusDay, and every card's position is recomputed on the rim.
+ *
+ *  The shortest path around the cycle is taken (so day 27 → day 2 wraps
+ *  forward through day 28/1, not backward through day 14).
+ * --------------------------------------------------------------------- */
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function useAnimatedDay(target: number, duration: number): number {
+  const [value, setValue] = useState(target);
+  const valueRef = useRef(target);
+  valueRef.current = value;
+
+  useEffect(() => {
+    const from = valueRef.current;
+    let delta = target - from;
+    // Take the shortest path around the 28-day cycle.
+    while (delta > 14) delta -= 28;
+    while (delta < -14) delta += 28;
+    if (Math.abs(delta) < 1e-4) {
+      setValue(target);
+      return;
+    }
+
+    const startTime = performance.now();
+    let raf = 0;
+
+    function tick(time: number) {
+      const t = Math.min((time - startTime) / duration, 1);
+      const next = from + delta * easeInOutCubic(t);
+      setValue(next);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    }
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+
+  return value;
 }

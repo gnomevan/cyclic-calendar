@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   epochMs,
   instantFromEpochMs,
-  now,
   solarWheel,
   toGregorianUTC,
   type Instant,
@@ -41,6 +40,10 @@ interface SolarYearTrackProps {
   width?: number;
   /** Days of past/future to include. Default ±183 (~6 months each way). */
   halfRangeDays?: number;
+  /** What sits at the vertical center of the track. */
+  referenceInstant: Instant;
+  /** The actual "now" — used to draw the now-marker at its true position. */
+  nowInstant: Instant;
 }
 
 interface AnchorMark {
@@ -54,26 +57,32 @@ export function SolarYearTrack({
   height,
   width = 120,
   halfRangeDays = 183,
+  referenceInstant,
+  nowInstant,
 }: SolarYearTrackProps) {
-  const [nowInstant, setNowInstant] = useState<Instant>(() => now());
+  const anchors = useMemo(
+    () => collectAnchors(referenceInstant, halfRangeDays),
+    [referenceInstant, halfRangeDays],
+  );
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNowInstant(now()), 300_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const anchors = useMemo(() => collectAnchors(nowInstant, halfRangeDays), [nowInstant, halfRangeDays]);
-
-  // Convert ms → y position on the track.
+  // Convert ms → y position on the track. Center is at the
+  // referenceInstant (= the focused day's instant), so the track
+  // follows the user's navigation through time. The "now" marker
+  // shifts above or below center to show where today sits relative
+  // to the focused day.
   function yFor(ms: number): number {
     const dayMs = 86_400_000;
-    const diffDays = (ms - epochMs(nowInstant)) / dayMs;
-    // diff = 0 → middle (0.5). diff = +halfRange → bottom (1.0).
-    return 0.5 + (diffDays / (halfRangeDays * 2));
+    const diffDays = (ms - epochMs(referenceInstant)) / dayMs;
+    return 0.5 + diffDays / (halfRangeDays * 2);
   }
 
   // Month labels at first-of-month boundaries inside the window.
-  const monthLabels = useMemo(() => monthBoundaries(nowInstant, halfRangeDays), [nowInstant, halfRangeDays]);
+  const monthLabels = useMemo(
+    () => monthBoundaries(referenceInstant, halfRangeDays),
+    [referenceInstant, halfRangeDays],
+  );
+
+  const nowYFrac = yFor(epochMs(nowInstant));
 
   return (
     <div className="solar-year-track" style={{ width, height }}>
@@ -131,21 +140,49 @@ export function SolarYearTrack({
           );
         })}
 
-        {/* "now" indicator — accent-colored, prominent */}
+        {/* Center marker (= the focused day's instant) — accent-colored. */}
         {(() => {
           const y = height / 2;
           return (
             <g>
-              <line x1={2} y1={y} x2={width - 2} y2={y} stroke="#d4a373" strokeWidth={1.5} strokeDasharray="2 3" opacity={0.6} />
+              <line
+                x1={2} y1={y}
+                x2={width - 2} y2={y}
+                stroke="#d4a373"
+                strokeWidth={1.5}
+                strokeDasharray="2 3"
+                opacity={0.6}
+              />
               <circle cx={width / 2} cy={y} r={5} fill="#d4a373" />
               <circle cx={width / 2} cy={y} r={9} fill="none" stroke="#d4a373" strokeWidth={1} opacity={0.4} />
+            </g>
+          );
+        })()}
+
+        {/* "now" indicator — travels with the actual current moment.
+            When the user navigates away, this marker shows them where
+            today sits relative to the focused day. */}
+        {nowYFrac >= 0 && nowYFrac <= 1 && (() => {
+          const y = nowYFrac * height;
+          const isAtCenter = Math.abs(nowYFrac - 0.5) < 0.005;
+          return (
+            <g>
+              <line
+                x1={width / 2 - 14} y1={y}
+                x2={width / 2 + 14} y2={y}
+                stroke="#9fc7e8"
+                strokeWidth={1.5}
+                opacity={isAtCenter ? 0 : 0.9}
+              />
+              <circle cx={width / 2} cy={y} r={4} fill="#9fc7e8" opacity={isAtCenter ? 0 : 1} />
               <text
-                x={width / 2 + 14}
+                x={width / 2 + 18}
                 y={y + 4}
                 textAnchor="start"
-                fontSize="12"
-                fill="#d4a373"
+                fontSize="11"
+                fill="#9fc7e8"
                 fontFamily="ui-monospace, monospace"
+                opacity={isAtCenter ? 0 : 1}
               >
                 now
               </text>
@@ -165,11 +202,11 @@ export function SolarYearTrack({
   );
 }
 
-function collectAnchors(nowInstant: Instant, halfRangeDays: number): AnchorMark[] {
+function collectAnchors(referenceInstant: Instant, halfRangeDays: number): AnchorMark[] {
   const dayMs = 86_400_000;
-  const nowMs = epochMs(nowInstant);
-  const startMs = nowMs - halfRangeDays * dayMs;
-  const endMs = nowMs + halfRangeDays * dayMs;
+  const referenceMs = epochMs(referenceInstant);
+  const startMs = referenceMs - halfRangeDays * dayMs;
+  const endMs = referenceMs + halfRangeDays * dayMs;
 
   const out: AnchorMark[] = [];
   const start = instantFromEpochMs(startMs);
@@ -185,7 +222,7 @@ function collectAnchors(nowInstant: Instant, halfRangeDays: number): AnchorMark[
         out.push({
           id: `${anchor.id}-${ms}`,
           label: SOLAR_ANCHOR_SHORT[anchor.id] ?? anchor.name,
-          yFrac: 0.5 + (ms - nowMs) / (halfRangeDays * 2 * dayMs),
+          yFrac: 0.5 + (ms - referenceMs) / (halfRangeDays * 2 * dayMs),
           ms,
         });
       }
@@ -195,11 +232,11 @@ function collectAnchors(nowInstant: Instant, halfRangeDays: number): AnchorMark[
   return out;
 }
 
-function monthBoundaries(nowInstant: Instant, halfRangeDays: number): { ms: number; label: string }[] {
+function monthBoundaries(referenceInstant: Instant, halfRangeDays: number): { ms: number; label: string }[] {
   const dayMs = 86_400_000;
-  const nowMs = epochMs(nowInstant);
-  const startMs = nowMs - halfRangeDays * dayMs;
-  const endMs = nowMs + halfRangeDays * dayMs;
+  const referenceMs = epochMs(referenceInstant);
+  const startMs = referenceMs - halfRangeDays * dayMs;
+  const endMs = referenceMs + halfRangeDays * dayMs;
 
   const startG = toGregorianUTC(instantFromEpochMs(startMs));
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
