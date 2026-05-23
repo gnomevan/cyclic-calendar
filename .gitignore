@@ -8,3 +8,4 @@ dist-ui/
 coverage/
 .vitest-cache/
 .claude/
+.vercel
