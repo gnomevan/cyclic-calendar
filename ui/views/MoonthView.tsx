@@ -54,7 +54,18 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
 const SCALE_MIN = 0.42;
 const OPACITY_MIN = 0.32;
-const VERTICAL_SCALE_PER_CYCLE = 0.08;
+
+// "Bend" — the spiral's axis curves slightly backward at the top and
+// bottom of the visible region, so distant turns recede into the
+// distance and the focus area opens up. The 5 visible turns are
+// modeled as an arc of a 13-turn full year (~360°/13 per turn), so
+// the angular span across the visible spiral is roughly π·5/13. A
+// cosine-shaped falloff traces the circular arc; cards at the edges
+// scale down to BEND_AT_EDGE and pull toward the central column,
+// while focus cards stay full-size and at their natural x.
+const BEND_AT_EDGE = 0.70;
+const ARC_SPAN_RAD = Math.PI * 5 / 13; // ≈ 1.21 rad
+const ARC_NORM = 1 - Math.cos(ARC_SPAN_RAD); // denominator for normalization
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
 const CANVAS_WIDTH = 1060;
@@ -153,22 +164,28 @@ export function MoonthView() {
       const daysFromFocus = (cardMs - animatedMs) / 86_400_000;
       const verticalOffset = daysFromFocus * VERTICAL_PER_DAY;
 
-      const x = CENTER_X + RX * Math.sin(angleRad);
-      const y = CENTER_Y + verticalOffset - RY * Math.cos(angleRad);
+      // Bend factor: how far into the receding curve this card sits.
+      // Cosine-shaped along an arc spanning ARC_SPAN_RAD radians (= 5
+      // turns of the 13-turn year). 1.0 at the focus center, BEND_AT_EDGE
+      // at the visible extremes. Used both to shrink card scale and to
+      // pull each card's horizontal position toward CENTER_X, so the
+      // top and bottom of the spiral visibly recede.
+      const verticalT = Math.min(1, Math.abs(daysFromFocus) / VISIBLE_HALF_DAYS);
+      const arcDepth = (1 - Math.cos(verticalT * ARC_SPAN_RAD)) / ARC_NORM; // 0 → 1
+      const bend = 1 - (1 - BEND_AT_EDGE) * arcDepth; // 1 → BEND_AT_EDGE
+
+      const xRaw = CENTER_X + RX * Math.sin(angleRad);
+      const x = CENTER_X + (xRaw - CENTER_X) * bend;
+      const y = CENTER_Y + verticalOffset - RY * Math.cos(angleRad) * bend;
 
       // Angular scale (front-vs-back of the local turn).
       const t = (1 - Math.cos((angleDeg - 180) * Math.PI / 180)) / 2;
       const angularScale = 1 - (1 - SCALE_MIN) * t;
-      // Vertical scale (turns away from focus).
-      const turnsAway = Math.abs(daysFromFocus) / SIDEREAL_CYCLE_DAYS;
-      const verticalScale = Math.max(
-        SCALE_MIN,
-        1 - VERTICAL_SCALE_PER_CYCLE * turnsAway,
-      );
-      const scale = angularScale * verticalScale;
+      const scale = angularScale * bend;
+      // Opacity: combine the angular fade with a gentle bend-based fade.
       const opacity =
         (1 - (1 - OPACITY_MIN) * t) *
-        Math.max(OPACITY_MIN, 1 - 0.06 * turnsAway);
+        Math.max(OPACITY_MIN, 1 - 0.30 * arcDepth);
 
       return { day: d, x, y, scale, opacity, daysFromFocus, angleDeg };
     });
