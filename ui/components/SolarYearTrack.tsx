@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import {
   WESTERN_SIGNS,
   ayanamsa,
@@ -26,14 +26,17 @@ import {
  * 28-day range will align with a segment of this track.
  */
 
+// Solar anchor labels. The cross-quarters keep their traditional
+// names; equinoxes/solstices spell out the season + event type so
+// the marker is clear ("Summer Solstice", not just "Summer").
 const SOLAR_ANCHOR_SHORT: Record<string, string> = {
-  spring_equinox: "Spring",
+  spring_equinox: "Spring Equinox",
   beltane: "Beltane",
-  summer_solstice: "Summer",
+  summer_solstice: "Summer Solstice",
   lughnasadh: "Lughnasadh",
-  autumn_equinox: "Autumn",
+  autumn_equinox: "Autumn Equinox",
   samhain: "Samhain",
-  winter_solstice: "Winter",
+  winter_solstice: "Winter Solstice",
   imbolc: "Imbolc",
 };
 
@@ -69,8 +72,8 @@ export function SolarYearTrack({
     [referenceInstant, halfRangeDays],
   );
 
-  const zodiacEntries = useMemo(
-    () => collectZodiacEntries(referenceInstant, halfRangeDays),
+  const zodiacSpans = useMemo(
+    () => collectZodiacSpans(referenceInstant, halfRangeDays),
     [referenceInstant, halfRangeDays],
   );
 
@@ -155,31 +158,36 @@ export function SolarYearTrack({
           );
         })}
 
-        {/* Zodiac sign entries — the 12 sun-in-sign boundaries
-            (sidereal). Coexist with the 8 anchors above. Shown on the
-            opposite side of the spine and colored per the sign's
-            traditional color so they read as a separate palette. */}
-        {zodiacEntries.map((z) => {
-          const y = z.yFrac * height;
-          if (y < 0 || y > height) return null;
+        {/* Zodiac SPANS — vertical bars showing how long the sun is in
+            each sidereal sign. The symbol sits at the midpoint of the
+            span. Colored by the sign's traditional palette. */}
+        {zodiacSpans.map((z) => {
+          const yStartRaw = z.startYFrac * height;
+          const yEndRaw = z.endYFrac * height;
+          // Clip to the visible track region.
+          const yStart = Math.max(0, yStartRaw);
+          const yEnd = Math.min(height, yEndRaw);
+          if (yEnd <= 0 || yStart >= height) return null;
+          const yMid = (yStart + yEnd) / 2;
           return (
             <g key={z.id}>
               <line
-                x1={width / 2 - 6} y1={y}
-                x2={width / 2 + 6} y2={y}
+                x1={width / 2 - 6} y1={yStart}
+                x2={width / 2 - 6} y2={yEnd}
                 stroke={z.sign.colorHex}
-                strokeWidth={1}
+                strokeWidth={2}
                 opacity={0.7}
               />
               <text
                 x={width / 2 - 14}
-                y={y + 4}
+                y={yMid + 5}
                 textAnchor="end"
                 fontSize="14"
                 fill={z.sign.colorHex}
-                fontFamily="ui-sans-serif, system-ui, sans-serif"
+                fontFamily='"Times New Roman", "Cambria Math", "Symbola", ui-serif, serif'
+                style={{ fontVariantEmoji: "text" } as CSSProperties}
               >
-                <title>{`Sun enters ${z.sign.name}`}</title>
+                <title>{`Sun in ${z.sign.name}`}</title>
                 {z.sign.symbol}
               </text>
             </g>
@@ -256,56 +264,75 @@ export function SolarYearTrack({
   );
 }
 
-interface ZodiacEntry {
+interface ZodiacSpan {
   id: string;
   sign: WesternSign;
-  yFrac: number;
-  ms: number;
+  /** Sun-enters-sign moment. */
+  startMs: number;
+  /** Sun-enters-next-sign moment (= this span's end). */
+  endMs: number;
+  /** Vertical fractions on the track for start / midpoint / end. */
+  startYFrac: number;
+  endYFrac: number;
 }
 
 /**
- * The 12 sun-enters-sign boundaries within the visible date range.
- * The sun's sidereal longitude is its of-date tropical longitude minus
- * the ayanamsa; "sun enters Aries" (sidereal) thus means the tropical
- * longitude crosses (0° + ayanamsa). Approximating the ayanamsa as
- * constant within the visible window (it drifts only ~0.014°/year) is
- * accurate to well within a day for these crossings.
+ * The sun-in-sign SPANS that cover any part of the visible window.
+ * For each visible sign, the span runs from the moment the sun enters
+ * it (sidereal longitude reaches that 30° boundary) to the moment the
+ * sun enters the next sign. The vertical bar shows the duration; the
+ * symbol is placed at the midpoint.
+ *
+ * Sidereal longitude = tropical longitude − ayanamsa, so "sun enters
+ * Aries (sidereal)" is when tropical longitude crosses (0° + ayanamsa).
  */
-function collectZodiacEntries(
+function collectZodiacSpans(
   referenceInstant: Instant,
   halfRangeDays: number,
-): ZodiacEntry[] {
+): ZodiacSpan[] {
   const dayMs = 86_400_000;
   const referenceMs = epochMs(referenceInstant);
   const startMs = referenceMs - halfRangeDays * dayMs;
   const endMs = referenceMs + halfRangeDays * dayMs;
   const ay = ayanamsa(referenceInstant);
 
-  const out: ZodiacEntry[] = [];
-  const start = instantFromEpochMs(startMs);
-
+  // Find all sun-enters-sign moments within ±1 year of reference.
+  // 12-13 entries per year per sign; we sort them chronologically to
+  // pair each with the NEXT in time (= the next sign starting).
+  const entries: { sign: WesternSign; ms: number }[] = [];
+  const searchFrom = instantFromEpochMs(referenceMs - 380 * dayMs);
   for (const sign of WESTERN_SIGNS) {
     const tropicalTarget = normalizeAngle(sign.index * 30 + ay);
-    let cursor = start;
-    // Each sign is crossed once per year; iterate up to 2 to handle
-    // ranges that wrap past a year.
+    let cursor = searchFrom;
     for (let i = 0; i < 2; i++) {
-      const next = solarWheel.nextCrossing(tropicalTarget, cursor);
-      if (next === null) break;
-      const ms = epochMs(next);
-      if (ms > endMs) break;
-      if (ms >= startMs) {
-        out.push({
-          id: `${sign.id}-${ms}`,
-          sign,
-          yFrac: 0.5 + (ms - referenceMs) / (halfRangeDays * 2 * dayMs),
-          ms,
-        });
-      }
-      cursor = next;
+      const hit = solarWheel.nextCrossing(tropicalTarget, cursor);
+      if (!hit) break;
+      const ms = epochMs(hit);
+      if (ms > referenceMs + 380 * dayMs) break;
+      entries.push({ sign, ms });
+      cursor = instantFromEpochMs(ms + 60_000);
     }
   }
-  return out;
+  entries.sort((a, b) => a.ms - b.ms);
+
+  // Pair each entry with the next chronological one. The duration
+  // between them = the span this sign occupies on the track.
+  const spans: ZodiacSpan[] = [];
+  for (let i = 0; i < entries.length - 1; i++) {
+    const start = entries[i]!;
+    const next = entries[i + 1]!;
+    // Skip spans entirely outside the visible window.
+    if (next.ms < startMs || start.ms > endMs) continue;
+    spans.push({
+      id: `${start.sign.id}-${start.ms}`,
+      sign: start.sign,
+      startMs: start.ms,
+      endMs: next.ms,
+      startYFrac: 0.5 + (start.ms - referenceMs) / (halfRangeDays * 2 * dayMs),
+      endYFrac: 0.5 + (next.ms - referenceMs) / (halfRangeDays * 2 * dayMs),
+    });
+  }
+  return spans;
 }
 
 function collectAnchors(referenceInstant: Instant, halfRangeDays: number): AnchorMark[] {
