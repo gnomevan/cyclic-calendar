@@ -751,7 +751,12 @@ main {
 }
 
 .zodiac-glyph {
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  /* Avoid Apple Color Emoji etc. for the zodiac codepoints —
+     they ship colored "emoji square" fonts for those characters
+     and we want the line-art symbol. */
+  font-family: "Times New Roman", "Cambria Math", "Symbola",
+               ui-serif, serif;
+  font-variant-emoji: text;
   user-select: none;
 }
 

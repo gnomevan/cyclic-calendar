@@ -80,19 +80,23 @@ export interface WesternSign {
 
 export const WESTERN_SIGN_WIDTH = 30;
 
+// The trailing "︎" on each `symbol` is the U+FE0E variation
+// selector (VS15). It forces TEXT presentation of the zodiac
+// codepoints — otherwise macOS/iOS render them as emoji (a colored
+// sign on a rounded-square background). We want the line-art glyph.
 export const WESTERN_SIGNS: readonly WesternSign[] = [
-  { index: 0,  id: "aries",       name: "Aries",       element: "fire",  rulingPlanet: "mars",    colorKey: "red",           colorHex: "#D7263D", symbol: "♈" },
-  { index: 1,  id: "taurus",      name: "Taurus",      element: "earth", rulingPlanet: "venus",   colorKey: "green",         colorHex: "#3E8E41", symbol: "♉" },
-  { index: 2,  id: "gemini",      name: "Gemini",      element: "air",   rulingPlanet: "mercury", colorKey: "yellow",        colorHex: "#F2C744", symbol: "♊" },
-  { index: 3,  id: "cancer",      name: "Cancer",      element: "water", rulingPlanet: "moon",    colorKey: "silver",        colorHex: "#C0C5CE", symbol: "♋" },
-  { index: 4,  id: "leo",         name: "Leo",         element: "fire",  rulingPlanet: "sun",     colorKey: "gold",          colorHex: "#E2A23B", symbol: "♌" },
-  { index: 5,  id: "virgo",       name: "Virgo",       element: "earth", rulingPlanet: "mercury", colorKey: "forest_green",  colorHex: "#2E5339", symbol: "♍" },
-  { index: 6,  id: "libra",       name: "Libra",       element: "air",   rulingPlanet: "venus",   colorKey: "rose",          colorHex: "#D49AAB", symbol: "♎" },
-  { index: 7,  id: "scorpio",     name: "Scorpio",     element: "water", rulingPlanet: "mars",    colorKey: "deep_red",      colorHex: "#5C0A1E", symbol: "♏" },
-  { index: 8,  id: "sagittarius", name: "Sagittarius", element: "fire",  rulingPlanet: "jupiter", colorKey: "purple",        colorHex: "#6F2DA8", symbol: "♐" },
-  { index: 9,  id: "capricorn",   name: "Capricorn",   element: "earth", rulingPlanet: "saturn",  colorKey: "slate",         colorHex: "#3D3D3D", symbol: "♑" },
-  { index: 10, id: "aquarius",    name: "Aquarius",    element: "air",   rulingPlanet: "saturn",  colorKey: "electric_blue", colorHex: "#1C7ED6", symbol: "♒" },
-  { index: 11, id: "pisces",      name: "Pisces",      element: "water", rulingPlanet: "jupiter", colorKey: "sea_green",     colorHex: "#2A9D8F", symbol: "♓" },
+  { index: 0,  id: "aries",       name: "Aries",       element: "fire",  rulingPlanet: "mars",    colorKey: "red",           colorHex: "#D7263D", symbol: "♈︎" },
+  { index: 1,  id: "taurus",      name: "Taurus",      element: "earth", rulingPlanet: "venus",   colorKey: "green",         colorHex: "#3E8E41", symbol: "♉︎" },
+  { index: 2,  id: "gemini",      name: "Gemini",      element: "air",   rulingPlanet: "mercury", colorKey: "yellow",        colorHex: "#F2C744", symbol: "♊︎" },
+  { index: 3,  id: "cancer",      name: "Cancer",      element: "water", rulingPlanet: "moon",    colorKey: "silver",        colorHex: "#C0C5CE", symbol: "♋︎" },
+  { index: 4,  id: "leo",         name: "Leo",         element: "fire",  rulingPlanet: "sun",     colorKey: "gold",          colorHex: "#E2A23B", symbol: "♌︎" },
+  { index: 5,  id: "virgo",       name: "Virgo",       element: "earth", rulingPlanet: "mercury", colorKey: "forest_green",  colorHex: "#2E5339", symbol: "♍︎" },
+  { index: 6,  id: "libra",       name: "Libra",       element: "air",   rulingPlanet: "venus",   colorKey: "rose",          colorHex: "#D49AAB", symbol: "♎︎" },
+  { index: 7,  id: "scorpio",     name: "Scorpio",     element: "water", rulingPlanet: "mars",    colorKey: "deep_red",      colorHex: "#5C0A1E", symbol: "♏︎" },
+  { index: 8,  id: "sagittarius", name: "Sagittarius", element: "fire",  rulingPlanet: "jupiter", colorKey: "purple",        colorHex: "#6F2DA8", symbol: "♐︎" },
+  { index: 9,  id: "capricorn",   name: "Capricorn",   element: "earth", rulingPlanet: "saturn",  colorKey: "slate",         colorHex: "#3D3D3D", symbol: "♑︎" },
+  { index: 10, id: "aquarius",    name: "Aquarius",    element: "air",   rulingPlanet: "saturn",  colorKey: "electric_blue", colorHex: "#1C7ED6", symbol: "♒︎" },
+  { index: 11, id: "pisces",      name: "Pisces",      element: "water", rulingPlanet: "jupiter", colorKey: "sea_green",     colorHex: "#2A9D8F", symbol: "♓︎" },
 ];
 
 /* ----- Nakshatras (27, 13°20′ each) ----------------------------------- *
