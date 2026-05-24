@@ -93,42 +93,31 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 // CSS `perspective` on the parent handles depth foreshortening.
 // Torus dimensions. With YEAR_DAYS now 36 525, the visible 5-cycle
 // window subtends only ~0.023 rad of the major circle, so sin(N·RATE)
-// ≈ N·RATE and per-day pitch dy/dt = R_MAJOR · 2π / YEAR_DAYS. Picking
-// R_MAJOR so pitch matches the live wheel's 8 px/day:
+// ≈ N·RATE and per-day pitch dy/dt = R_MAJOR · 2π / YEAR_DAYS. R_MAJOR
+// is the lever for vertical separation between moonth-rings:
 //
-//   R_MAJOR = 8 · YEAR_DAYS / (2π) ≈ 46 500
+//   pitch (px/day) = R_MAJOR · 2π / YEAR_DAYS
+//   For 10 px/day:  R_MAJOR ≈ 58 000  (cycle-to-cycle vertical = 273 px)
+//   For  8 px/day:  R_MAJOR ≈ 46 500  (cycle-to-cycle vertical = 218 px)
 //
-// Cross-section is an ELLIPSOID, not a circle — cheating the geometry
-// per user request so the visible 5 rings read like the live wheel:
+// Cross-section is an ELLIPSOID, not a circle:
 //
-//   R_MINOR_X: horizontal extent. Wide enough that 28 × 105-px cards
-//              just-touch at the front of each ring, not overlap.
-//              Adjacent days span 13.18° at the front:
-//                 spacing = R_MINOR_X · sin(13.18°) · scale_at_z ≈ 105
-//                 ⇒ R_MINOR_X ≈ 480
+//   R_MINOR_X: horizontal extent. Wider ⇒ cards spread more around the
+//              ring; tighter ⇒ cards bump into each other at the front.
+//   R_MINOR_Y: vertical extent (the tilted-ellipse look) — the focused
+//              day at ψ=0 sits below ring centre by R_MINOR_Y, back of
+//              cycle (ψ=π) sits above by the same. Smaller R_MINOR_Y =
+//              less ring-to-ring vertical overlap.
+//   R_MINOR_Z: depth extent for the CSS perspective foreshortening.
 //
-//   R_MINOR_Y: vertical extent. Matches the live wheel's RY=65; gives
-//              the tilted-ellipse look where the focused day sits at
-//              the bottom of its ring and back-of-cycle days sit at
-//              the top — so back cards aren't occluded by front cards.
-//
-//   R_MINOR_Z: depth extent. Sized so back of focus ring (z = −2·R_Z)
-//              hits live's 0.42 scale with PERSPECTIVE_PX = 500:
-//                 P / (P + 2·R_Z) = 0.42  ⇒  R_Z = 0.69·P ≈ 345
-const R_MAJOR = Math.round((8 * YEAR_DAYS) / (2 * Math.PI));
-const R_MINOR_X = 480;
+// PERSPECTIVE_PX controls the strength of the 3D effect. Larger
+// distance ⇒ flatter projection, less foreshortening. The front-to-
+// back scale ratio inside one ring is P / (P + 2·R_MINOR_Z).
+const R_MAJOR = Math.round((10 * YEAR_DAYS) / (2 * Math.PI));
+const R_MINOR_X = 540;
 const R_MINOR_Y = 65;
 const R_MINOR_Z = 345;
-
-// Perspective tuned so the front-to-back ratio inside a single ring
-// matches the live wheel's 1.0 → 0.42 angularScale curve:
-//
-//   front of focus ring at z = 0      ⇒ scale = 1.0
-//   back of focus ring  at z = -2·R_MINOR ⇒ scale = P / (P + 2·R_MINOR)
-//
-//   To get ratio 0.42: P ≈ 0.84·R_MINOR / 0.58 ≈ 1.45·R_MINOR
-//   For R_MINOR = 350 ⇒ P ≈ 500.
-const PERSPECTIVE_PX = 500;
+const PERSPECTIVE_PX = 1000;
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
 const CANVAS_WIDTH = 1100;
