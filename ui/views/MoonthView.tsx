@@ -54,65 +54,46 @@ const CARD_WIDTH = 50;
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
 // Torus geometry — axis along X (horizontal, perpendicular to view).
-// Major circle lives in the YZ plane and the donut "hole" points
-// left/right. With X being the axis, the major circle by itself
-// would project to a vertical line on screen (edge-on). To reveal
-// the donut shape we then apply a rotateY tilt to the whole scene,
-// so the major circle projects to an ellipse rather than a line —
-// like tipping a tire toward you to see into its rim. The torus
-// geometry itself is unchanged; only the viewing orientation tilts.
+// Major circle lives in the YZ plane; the donut's hole points left/
+// right (out of view). We see the torus edge-on: a vertical band
+// where the top and bottom lobes hold the cards from the upper and
+// lower arcs of the year-circle, and the visible "hole" is the gap
+// between those lobes near vertical center.
 //
 //   R_MAJOR — distance from torus center to each cross-section center.
-//   R_MINOR — cross-section radius (donut tube thickness). 28 cards
-//             per moonth helix around this.
+//             Bigger ⇒ top/bottom lobes farther apart ⇒ bigger gap.
+//   R_MINOR — cross-section radius (donut tube thickness). Bigger ⇒
+//             cards spread more horizontally and less overlap.
 //
 // The card helix is a (1, ~13) torus knot — one major revolution per
 // year, ~13 minor revolutions (one per sidereal lunar cycle):
 //
 //   φ (major) = π/2 + daysFromFocus · (2π / YEAR_DAYS)
-//               — focus at φ=π/2, mathY=0, z=+(R+r): the front of
-//                 the edge-on torus, closest to camera before tilt.
-//                 Past = larger φ (curves up); future = smaller (down).
+//               — focus at φ=π/2 sits at the front of the edge-on
+//                 torus (z = +(R+r), closest to camera). Past = larger
+//                 φ (curves up); future = smaller φ (curves down).
 //   ψ (minor) = (moonSiderealAngle − focusSiderealAngle)
 //               — focused day at ψ=0, on the outer face of its
 //                 cross-section (pointing away from torus axis).
 //
-// Edge-on torus surface point:
-//   X' =  R_MINOR · sin(ψ)
-//   Y' = (R_MAJOR + R_MINOR · cos(ψ)) · cos(φ)
-//   Z' = (R_MAJOR + R_MINOR · cos(ψ)) · sin(φ)
+// Torus surface point:
+//   X =  R_MINOR · sin(ψ)
+//   Y = (R_MAJOR + R_MINOR · cos(ψ)) · cos(φ)
+//   Z = (R_MAJOR + R_MINOR · cos(ψ)) · sin(φ)
 //
-// Then rotateY by TORUS_TILT_RAD (rotation around the vertical Y
-// axis) — rotates X'/Z' into the viewing plane so the donut hole
-// reveals itself:
-//   X = X' · cos(tilt) + Z' · sin(tilt)
-//   Y = Y'
-//   Z = −X' · sin(tilt) + Z' · cos(tilt)
-//
-// CSS `perspective` on the parent then handles foreshortening.
-// R_MAJOR / R_MINOR sets the donut shape. Hole diameter = 2·(R_MAJOR−R_MINOR);
-// outer diameter = 2·(R_MAJOR+R_MINOR). Cross-section circumference =
-// 2π·R_MINOR, which has to fit ~28 cards per moonth — so wider tube
-// (bigger R_MINOR) = less card overlap, but R_MAJOR has to grow even
-// faster to keep the hole opening up.
-const R_MAJOR = 500;
-const R_MINOR = 200;
-
-// How much to tilt the (edge-on) torus toward face-on. 0° = pure edge-on
-// (donut hole invisible, just a vertical band). 90° = fully face-on
-// (perfect circle, donut hole at max). Somewhere in the middle gives
-// the "looking at a tilted tire from the side" feel — donut hole
-// clearly visible, but the torus still reads as 3D rather than flat.
-const TORUS_TILT_DEG = 60;
-const TORUS_TILT_RAD = (TORUS_TILT_DEG * Math.PI) / 180;
-const TILT_COS = Math.cos(TORUS_TILT_RAD);
-const TILT_SIN = Math.sin(TORUS_TILT_RAD);
+// CSS `perspective` on the parent handles depth foreshortening.
+// Edge-on torus (no view tilt). Bigger R_MAJOR = bigger gap between
+// the top and bottom "lobes" of cards in the silhouette (the donut's
+// "hole" pulled apart vertically). Bigger R_MINOR = wider tube =
+// less card overlap around each cross-section.
+const R_MAJOR = 650;
+const R_MINOR = 240;
 
 const PERSPECTIVE_PX = 1600;
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
-const CANVAS_WIDTH = 1440;
-const CANVAS_HEIGHT = 1440;
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 1900;
 
 const CENTER_X = CANVAS_WIDTH / 2;
 const CENTER_Y = CANVAS_HEIGHT / 2;
@@ -213,14 +194,9 @@ export function MoonthView() {
 
       // Edge-on torus surface (major circle in YZ plane, axis along X).
       const radial = R_MAJOR + R_MINOR * Math.cos(psi);
-      const xPre = R_MINOR * Math.sin(psi);
-      const yPre = radial * Math.cos(phi);
-      const zPre = radial * Math.sin(phi);
-
-      // rotateY tilt — opens the donut's hole to the camera.
-      const xMath = xPre * TILT_COS + zPre * TILT_SIN;
-      const yMath = yPre;
-      const zMath = -xPre * TILT_SIN + zPre * TILT_COS;
+      const xMath = R_MINOR * Math.sin(psi);
+      const yMath = radial * Math.cos(phi);
+      const zMath = radial * Math.sin(phi);
 
       // Map math → CSS. Math Y is up; CSS y is down.
       const x = CENTER_X + xMath;
