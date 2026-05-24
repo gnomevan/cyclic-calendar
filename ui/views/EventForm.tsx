@@ -72,6 +72,47 @@ const MONTH_NAMES = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+/**
+ * Color palette for the event's dot/badge. Warm amber-leaning so the
+ * dots blend with the calendar's overall amber theme; cool blue and
+ * green at the end for variety.
+ */
+const EVENT_COLORS: readonly { hex: string; label: string }[] = [
+  { hex: "#d4a373", label: "Amber" },
+  { hex: "#c0855a", label: "Bronze" },
+  { hex: "#9b3a2a", label: "Brick" },
+  { hex: "#d76a3b", label: "Marigold" },
+  { hex: "#9c7d3f", label: "Olive" },
+  { hex: "#5a8a6e", label: "Sage" },
+  { hex: "#3d7a96", label: "Slate Blue" },
+  { hex: "#7d62a8", label: "Mulberry" },
+];
+
+/** Format an Instant as a YYYY-MM-DD string in UTC. */
+function instantToYmd(at: Instant): string {
+  const g = toGregorianUTC(at);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${g.year}-${pad(g.month)}-${pad(g.day)}`;
+}
+
+/** Difference in whole days between two YYYY-MM-DD strings. */
+function daysBetween(startYmd: string, endYmd: string): number {
+  const ms = (s: string) => {
+    const [y, m, d] = s.split("-").map((p) => parseInt(p, 10));
+    return Date.UTC(y!, m! - 1, d!);
+  };
+  return Math.max(0, Math.round((ms(endYmd) - ms(startYmd)) / 86_400_000));
+}
+
+/** Add `days` to a YYYY-MM-DD string and return the result in the same format. */
+function ymdPlusDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map((p) => parseInt(p, 10));
+  const ms = Date.UTC(y!, m! - 1, d!) + days * 86_400_000;
+  const date = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
 interface RuleDraft {
   kind: PinningRule["kind"];
   anchor?: AnchorRef;
@@ -137,6 +178,12 @@ export function EventForm() {
   const [isOrigin, setIsOrigin] = useState(false);
   const [draft, setDraft] = useState<RuleDraft>({ kind: "exact" });
   const [attachments, setAttachments] = useState<AttachmentChecks>(DEFAULT_ATTACHMENTS);
+  // Time / span / color — presentation metadata.
+  const [startDay, setStartDay] = useState<string>(""); // YYYY-MM-DD
+  const [startTime, setStartTime] = useState<string>("09:00");
+  const [endDay, setEndDay] = useState<string>(""); // YYYY-MM-DD
+  const [endTime, setEndTime] = useState<string>("10:00");
+  const [color, setColor] = useState<string>(EVENT_COLORS[0]!.hex);
   const [error, setError] = useState<string | null>(null);
 
   // Decide whether the form should show the simple checkbox UI or the
@@ -176,9 +223,17 @@ export function EventForm() {
       } else {
         setDraft(ruleToDraft(editingEvent.rule));
       }
+      // Presentation fields — populate from saved event, fall back to defaults.
+      setStartTime(editingEvent.startTime ?? "09:00");
+      setEndTime(editingEvent.endTime ?? "10:00");
+      // Default the start day to the event's next resolved occurrence
+      // if it has a date-based rule, otherwise today. Cycle rules don't
+      // carry a specific year, so this is best-effort.
+      const baseDay = instantToYmd(now());
+      setStartDay(baseDay);
+      setEndDay(ymdPlusDays(baseDay, editingEvent.durationDays ?? 0));
+      setColor(editingEvent.color ?? EVENT_COLORS[0]!.hex);
       setError(null);
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.setTimeout(() => nameRef.current?.focus(), 350);
     } else if (!creatingFromDay) {
       reset();
     }
@@ -186,13 +241,14 @@ export function EventForm() {
   }, [editingEventId]);
 
   // When click-from-day creation starts, reset the form and seed
-  // attachments to all-checked.
+  // attachments to all-checked + start/end day from the clicked day.
   useEffect(() => {
     if (creatingFromDay) {
       reset();
       setAttachments(DEFAULT_ATTACHMENTS);
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.setTimeout(() => nameRef.current?.focus(), 350);
+      const ymd = instantToYmd(creatingFromDay);
+      setStartDay(ymd);
+      setEndDay(ymd);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creatingFromDay]);
@@ -206,6 +262,12 @@ export function EventForm() {
     setDescription("");
     setIsOrigin(false);
     setDraft({ kind: "exact" });
+    setStartTime("09:00");
+    setEndTime("10:00");
+    const ymd = instantToYmd(now());
+    setStartDay(ymd);
+    setEndDay(ymd);
+    setColor(EVENT_COLORS[0]!.hex);
     setError(null);
   }
 
@@ -237,11 +299,22 @@ export function EventForm() {
       }
     }
 
+    // Sanity: end day must not be before start day.
+    if (endDay && startDay && endDay < startDay) {
+      setError("End day can't be before start day.");
+      return;
+    }
+    const durationDays = startDay && endDay ? daysBetween(startDay, endDay) : 0;
+
     const input = {
       name: name.trim(),
       ...(description.trim() && { description: description.trim() }),
       rule,
       ...(isOrigin && { isOrigin: true }),
+      ...(startTime && { startTime }),
+      ...(endTime && { endTime }),
+      ...(durationDays > 0 && { durationDays }),
+      ...(color && { color }),
     };
     if (editingEventId) {
       updateEvent(editingEventId, input);
@@ -284,42 +357,84 @@ export function EventForm() {
       <div className="wheel-kind">{headingKind}</div>
       <h2 id="event-form-title">{headingTitle}</h2>
       <form onSubmit={handleSubmit}>
-        <label>
-          Name
+        <label className="event-form-title-field">
           <input
             ref={nameRef}
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Solstice gathering"
+            placeholder="Add title"
             required
           />
         </label>
 
-        <label>
-          Description (optional)
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-          />
-        </label>
+        {/* Start / end day + time grid — Google-Calendar-style. */}
+        <div className="event-form-when">
+          <div className="when-row">
+            <span className="when-label">Starts</span>
+            <input
+              type="date"
+              value={startDay}
+              onChange={(e) => {
+                setStartDay(e.target.value);
+                if (endDay && e.target.value > endDay) setEndDay(e.target.value);
+              }}
+            />
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
+          </div>
+          <div className="when-row">
+            <span className="when-label">Ends</span>
+            <input
+              type="date"
+              value={endDay}
+              min={startDay}
+              onChange={(e) => setEndDay(e.target.value)}
+            />
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+            />
+          </div>
+        </div>
 
-        <label className="inline">
-          <input
-            type="checkbox"
-            checked={isOrigin}
-            onChange={(e) => setIsOrigin(e.target.checked)}
-          />
-          Treat as origin (this event can anchor counts)
-        </label>
+        {/* Color picker. */}
+        <div className="event-form-color">
+          <span className="when-label">Color</span>
+          <div className="event-form-color-swatches" role="radiogroup" aria-label="Event color">
+            {EVENT_COLORS.map((c) => (
+              <button
+                key={c.hex}
+                type="button"
+                className={
+                  color === c.hex
+                    ? "event-color-swatch event-color-swatch-selected"
+                    : "event-color-swatch"
+                }
+                style={{ background: c.hex }}
+                aria-label={c.label}
+                aria-checked={color === c.hex}
+                role="radio"
+                onClick={() => setColor(c.hex)}
+              />
+            ))}
+          </div>
+        </div>
 
+        {/* Recurrence — repeat on cycles. */}
         {isSimpleMode && dayCycles ? (
-          <AttachmentChecklist
-            cycles={dayCycles}
-            attachments={attachments}
-            onChange={setAttachments}
-          />
+          <div className="event-form-recur">
+            <span className="when-label">Repeat on</span>
+            <AttachmentChecklist
+              cycles={dayCycles}
+              attachments={attachments}
+              onChange={setAttachments}
+            />
+          </div>
         ) : (
           <>
             <label>
@@ -340,11 +455,30 @@ export function EventForm() {
           </>
         )}
 
+        <label>
+          Description
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="Add description (optional)"
+          />
+        </label>
+
+        <label className="inline">
+          <input
+            type="checkbox"
+            checked={isOrigin}
+            onChange={(e) => setIsOrigin(e.target.checked)}
+          />
+          Treat as origin (this event can anchor counts)
+        </label>
+
         {error && <p className="error">{error}</p>}
 
         <div className="event-form-buttons">
           <button type="submit">
-            {isEditing ? "Update event" : "Add event"}
+            {isEditing ? "Save event" : "Add event"}
           </button>
           <button type="button" className="event-form-cancel" onClick={handleCancel}>
             Cancel

@@ -14,6 +14,22 @@ export interface CalendarEvent {
   rule: PinningRule;
   /** If true, this event is also usable as an origin for counts. */
   isOrigin?: boolean;
+
+  // --- Presentation metadata, optional. Don't affect resolution or
+  // --- counts; the rule alone determines WHEN. These describe HOW
+  // --- the event appears once it resolves to a moment.
+
+  /** Local clock time the event starts, "HH:MM" (24-h). */
+  startTime?: string;
+  /** Local clock time the event ends, "HH:MM". */
+  endTime?: string;
+  /**
+   * How many days the event spans from its start day. 0 (or omitted)
+   * means single-day; 1 = ends on the next day at endTime; etc.
+   */
+  durationDays?: number;
+  /** CSS color string for the event's dot/badge on cards. */
+  color?: string;
 }
 
 /**
