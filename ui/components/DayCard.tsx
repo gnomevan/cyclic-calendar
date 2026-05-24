@@ -117,10 +117,11 @@ export function DayCard({
     setEditingEventId(eventId);
   }
 
-  // Moon glyph fills most of the card; zodiac glyph sits over it like
-  // a tattoo on the moon. Date top-center with the 3-letter weekday to
-  // its left. No moonth-day number any more.
-  const moonGlyphSize = Math.round(width * 0.84);
+  // Moon glyph fills most of the card; the zodiac glyph sits over it
+  // centered like a tattoo. Events (when present) flow above the moon
+  // — the moon naturally shrinks to make room rather than getting
+  // covered by an overlay.
+  const moonGlyphSize = Math.round(width * 0.72);
 
   return (
     <div className={classes.join(" ")} style={{ width, height }}>
@@ -135,12 +136,6 @@ export function DayCard({
         onClick={handleBodyClick}
         title={isFocus ? "Click to add an event here" : "Click to focus this day"}
       >
-        <div className="day-card-moon-stage" aria-hidden="true">
-          <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
-          <span className="day-card-moon-tattoo">
-            <ZodiacGlyph angle={moonSiderealAngle} size={Math.round(moonGlyphSize * 0.42)} />
-          </span>
-        </div>
         {events.length > 0 && (
           <ul className="day-card-events">
             {visible.map(({ event, at: occurrenceAt }) => (
@@ -161,6 +156,16 @@ export function DayCard({
             )}
           </ul>
         )}
+        <div className="day-card-moon-stage" aria-hidden="true">
+          <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
+          <span className="day-card-moon-tattoo">
+            <ZodiacGlyph
+              angle={moonSiderealAngle}
+              size={Math.round(moonGlyphSize * 0.42)}
+              colorize={false}
+            />
+          </span>
+        </div>
       </div>
     </div>
   );

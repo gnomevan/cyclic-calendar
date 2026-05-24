@@ -721,16 +721,17 @@ main {
   color: var(--fg-dim);
 }
 
-/* Moon stage — the moon glyph takes most of the card and the zodiac
-   sign glyph sits centered over it like a tattoo on the moon.
-   Absolutely positioned so the events list (when present) can flow
-   over it without fighting for vertical space. */
+/* Moon stage — the moon glyph fills most of the body, and the zodiac
+   sign sits centered over it like a tattoo (just a plain symbol, no
+   halo or blend tricks). Events (when present) flow above the moon
+   in normal document order, and the moon shrinks to fit. */
 .day-card-moon-stage {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 0;
   pointer-events: none;
 }
 
@@ -744,14 +745,8 @@ main {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* The tattoo sits over the moon's surface — give it a soft glow so
-     it reads against the light AND dark parts of the phase glyph. */
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.55), 0 0 8px rgba(0, 0, 0, 0.35);
-  mix-blend-mode: difference;
   font-weight: 600;
+  color: var(--fg);
   pointer-events: none;
 }
 
@@ -763,21 +758,12 @@ main {
 .day-card-events {
   list-style: none;
   margin: 0;
-  padding: 6px 7px 7px;
+  padding: 5px 7px 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
+  flex: 0 0 auto; /* events take their natural height; moon stage fills rest */
   overflow: hidden;
-  position: relative; /* lifts above the absolutely-positioned moon stage */
-  align-self: flex-end;
-  width: 100%;
-  background: linear-gradient(
-    to top,
-    rgba(15, 18, 23, 0.92) 0%,
-    rgba(15, 18, 23, 0.78) 60%,
-    rgba(15, 18, 23, 0) 100%
-  );
 }
 
 .day-card-events li {
