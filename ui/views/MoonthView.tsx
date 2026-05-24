@@ -168,16 +168,40 @@ export function MoonthView() {
   // stable while rotation animates around it).
   const focusMs = epochMs(focusInstant);
   const days = useMemo(() => {
-    const out: DayInfo[] = [];
     const focusG = toGregorianUTC(focusInstant);
     const focusNoonMs = Date.UTC(focusG.year, focusG.month - 1, focusG.day, 12);
+    const startMs = focusNoonMs - (VISIBLE_HALF_DAYS + 1) * 86_400_000;
+    const endMs = focusNoonMs + (VISIBLE_HALF_DAYS + 1) * 86_400_000;
+
+    // Pre-compute every phase crossing in the visible window so each
+    // card can be tagged with its own primary phase event (if any)
+    // in O(1) by binning into day-midnight buckets.
+    const phaseEvents = collectPhaseEvents(startMs, endMs);
+    const phaseByDayBucket = new Map<
+      number,
+      { kind: "new" | "first_quarter" | "full" | "last_quarter"; at: Instant }
+    >();
+    for (const e of phaseEvents) {
+      // Bucket key = midnight-UTC of the day containing the crossing.
+      const midnight = Math.floor(e.ms / 86_400_000) * 86_400_000;
+      // If a day has multiple crossings somehow, prefer the earliest
+      // (rare — phases are ~7 days apart, so this is just defensive).
+      if (!phaseByDayBucket.has(midnight)) {
+        phaseByDayBucket.set(midnight, { kind: e.kind, at: e.at });
+      }
+    }
+
+    const out: DayInfo[] = [];
     for (let k = -VISIBLE_HALF_DAYS; k <= VISIBLE_HALF_DAYS; k++) {
       const ms = focusNoonMs + k * 86_400_000;
       const at = instantFromEpochMs(ms);
+      const midnight = Math.floor(ms / 86_400_000) * 86_400_000;
+      const phaseEvent = phaseByDayBucket.get(midnight);
       out.push({
         at,
         moonAngle: lunarWheel.positionAt(at),
         moonSiderealAngle: lunarSiderealWheel.positionAt(at),
+        ...(phaseEvent ? { phaseEvent } : {}),
       });
     }
     return out;
@@ -323,6 +347,7 @@ export function MoonthView() {
                     events={eventsByDayMs.get(cardMs) ?? []}
                     width={CARD_WIDTH}
                     variant="focus"
+                    {...(day.phaseEvent ? { phaseEvent: day.phaseEvent } : {})}
                   />
                 </div>
               );
@@ -344,6 +369,41 @@ interface DayInfo {
   at: Instant;
   moonAngle: number;
   moonSiderealAngle: number;
+  /**
+   * If the day contains a primary moon-phase crossing (new / first
+   * quarter / full / last quarter), the exact instant of that
+   * crossing and which phase it is. Otherwise undefined.
+   */
+  phaseEvent?: { kind: "new" | "first_quarter" | "full" | "last_quarter"; at: Instant };
+}
+
+const PHASE_ANCHOR_KINDS = [
+  { kind: "new" as const, angle: 0 },
+  { kind: "first_quarter" as const, angle: 90 },
+  { kind: "full" as const, angle: 180 },
+  { kind: "last_quarter" as const, angle: 270 },
+];
+
+/** All synodic phase crossings within [startMs, endMs]. */
+function collectPhaseEvents(
+  startMs: number,
+  endMs: number,
+): { kind: DayInfo["phaseEvent"] extends infer T ? T extends { kind: infer K } ? K : never : never; at: Instant; ms: number }[] {
+  const out: { kind: "new" | "first_quarter" | "full" | "last_quarter"; at: Instant; ms: number }[] = [];
+  for (const anchor of PHASE_ANCHOR_KINDS) {
+    let cursor = instantFromEpochMs(startMs);
+    // At most ~5 crossings of each phase in a ±6-month window.
+    for (let i = 0; i < 8; i++) {
+      const hit = lunarWheel.nextCrossing(anchor.angle, cursor);
+      if (!hit) break;
+      const ms = epochMs(hit);
+      if (ms > endMs) break;
+      out.push({ kind: anchor.kind, at: hit, ms });
+      cursor = instantFromEpochMs(ms + 60_000); // skip 1 minute to avoid re-finding same crossing
+    }
+  }
+  out.sort((a, b) => a.ms - b.ms);
+  return out;
 }
 
 function formatShort(at: Instant): string {

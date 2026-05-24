@@ -693,8 +693,28 @@ main {
               0 0 16px rgba(159, 199, 232, 0.45);
 }
 
+/* Phase tag — sits between the moon and the date row. Shows the
+   plain phase name on most days ("Waxing Gibbous") and the exact
+   clock time on the four primary phase days ("Full: 10:02pm"). */
+.day-card-phase {
+  font-size: 0.62rem;
+  text-align: center;
+  padding: 2px 4px 1px;
+  color: rgba(200, 152, 104, 0.7);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  flex: 0 0 auto;
+  text-transform: uppercase;
+}
+
+.day-card-phase-anchor {
+  color: #d4a373;
+  font-weight: 600;
+}
+
 /* Date row — weekday (3-letter) on the left, calendar date next to
-   it. Sits between the moon-stage above and the events list below. */
+   it. Sits below the phase tag and above the events list. */
 .day-card-head {
   display: flex;
   align-items: baseline;

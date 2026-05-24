@@ -6,7 +6,7 @@ import {
 } from "../../src/index.js";
 import { setEditingEventId, startCreatingFromDay } from "../editing.js";
 import { setFocus } from "../focus.js";
-import { MoonGlyph } from "./MoonGlyph.js";
+import { MoonGlyph, phaseName } from "./MoonGlyph.js";
 import { ZodiacGlyph } from "./ZodiacGlyph.js";
 
 /**
@@ -66,6 +66,16 @@ interface DayCardProps {
   width?: number;
   /** Ring-level color variant. */
   variant?: DayCardVariant;
+  /**
+   * If this day contains a primary moon-phase crossing (new / first
+   * quarter / full / last quarter), the exact instant of that
+   * crossing. Used to render a phase tag like "Full: 10:02pm" instead
+   * of just "Waxing Gibbous".
+   */
+  phaseEvent?: {
+    kind: "new" | "first_quarter" | "full" | "last_quarter";
+    at: Instant;
+  };
 }
 
 export function DayCard({
@@ -78,6 +88,7 @@ export function DayCard({
   events,
   width = 105,
   variant = "focus",
+  phaseEvent,
 }: DayCardProps) {
   const height = Math.round(width * 1.618);
   const g = toGregorianUTC(at);
@@ -118,10 +129,16 @@ export function DayCard({
   }
 
   // Stacking order, top → bottom:
-  //   1. moon + zodiac tattoo (fills available space)
-  //   2. weekday + date
-  //   3. events (when present)
+  //   1. moon + zodiac tattoo
+  //   2. phase tag — "Waxing Gibbous", or for primary phase days
+  //                 "Full: 10:02pm" with the exact crossing time
+  //   3. weekday + date
+  //   4. events (when present)
   const moonGlyphSize = Math.round(width * 0.72);
+
+  const phaseLabel = phaseEvent
+    ? `${PHASE_KIND_LABEL[phaseEvent.kind]}: ${formatClockTime(phaseEvent.at)}`
+    : phaseName(moonAngle);
 
   return (
     <div
@@ -139,6 +156,15 @@ export function DayCard({
             colorize={false}
           />
         </span>
+      </div>
+      <div
+        className={
+          phaseEvent
+            ? "day-card-phase day-card-phase-anchor"
+            : "day-card-phase"
+        }
+      >
+        {phaseLabel}
       </div>
       <div className="day-card-head">
         <span className="day-card-weekday">{weekday}</span>
@@ -179,4 +205,26 @@ function formatTime(at: Instant): string {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(epochMs(at)));
+}
+
+const PHASE_KIND_LABEL: Record<NonNullable<DayCardProps["phaseEvent"]>["kind"], string> = {
+  new: "New",
+  first_quarter: "First Quarter",
+  full: "Full",
+  last_quarter: "Last Quarter",
+};
+
+/** Local-time clock string like "10:02pm" (lowercase, no space). */
+function formatClockTime(at: Instant): string {
+  const parts = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(new Date(epochMs(at)));
+  // Default formats look like "10:02 PM"; strip space, lowercase the
+  // meridiem so it matches the user's spec.
+  return parts
+    .map((p) => (p.type === "dayPeriod" ? p.value.toLowerCase() : p.value))
+    .join("")
+    .replace(/\s+/g, "");
 }
