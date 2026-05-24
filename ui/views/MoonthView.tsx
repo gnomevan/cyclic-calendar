@@ -43,37 +43,51 @@ import { wheelRegistry } from "../wheels.js";
  * re-derive each frame, so every card traces the rim continuously.
  */
 
-const VISIBLE_HALF_DAYS = 68; // ~2.5 sidereal cycles each side; 5 visible total
 const SIDEREAL_CYCLE_DAYS = 27.32;
-const VERTICAL_PER_DAY = 8; // target px-per-day pitch *at focus* (along the arc tangent)
+const YEAR_DAYS = 365.25;
 
-const RX = 420;
-const RY = 65;
-const CARD_WIDTH = 105;
+// Show the whole year for now so the torus shape is obvious.
+// We can zoom in on a smaller window once the geometry is right.
+const VISIBLE_HALF_DAYS = Math.floor(YEAR_DAYS / 2); // ≈ 182 days each side = full year
+
+const CARD_WIDTH = 55;
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
-const SCALE_MIN = 0.42;
-const OPACITY_MIN = 0.32;
-
-// The year is one closed circle of TURNS_PER_YEAR sidereal lunar cycles.
-// Each card's ring-center sits at a real angular position θ on this
-// year-circle and gets real 3D (y, z) coordinates from it. Extending the
-// same parameterization past the visible 5 rings genuinely closes back
-// to itself after 13 — not a normalized 0→1 arc, but the real geometry.
+// Torus geometry. The torus is on its side — its axis runs left/right
+// (X axis), perpendicular to the camera. The donut sits with the
+// hole facing left and right; the camera sees its outer profile as a
+// circular ring.
 //
-// At θ=0 the tangent is vertical, so dy/dθ = R_arc; we pick R_arc so the
-// pitch at focus matches VERTICAL_PER_DAY, keeping the year track on the
-// left lined up at the focus and only diverging as the arc curves.
-const TURNS_PER_YEAR = 13;
-const RADIANS_PER_DAY =
-  (2 * Math.PI) / (TURNS_PER_YEAR * SIDEREAL_CYCLE_DAYS);
-const ARC_RADIUS_PX = VERTICAL_PER_DAY / RADIANS_PER_DAY; // ≈ 452 px
+//   R_MAJOR — distance from torus center to the cross-section center
+//             (= "year-circle radius"). 13 moonth-cross-sections sit
+//             around this major circle.
+//   R_MINOR — radius of each cross-section circle (the donut tube).
+//             Cards going around each cross-section represent the
+//             ~28 days of one moonth.
+//
+// The card helix:
+//   φ (major-angle)  = π/2 + daysFromFocus · (2π / YEAR_DAYS)
+//                      — focus sits at φ=π/2, the front of the torus
+//                        (closest to camera). Past goes up-and-back,
+//                        future goes down-and-back.
+//   ψ (minor-angle)  = (moonSiderealAngle − focusSiderealAngle) [rad]
+//                      — focused day at ψ=0 (cross-section's outward
+//                        side = front of focus moonth's cross-section).
+//
+// Card 3D position on the torus surface:
+//   X =  R_minor · sin(ψ)
+//   Y = (R_major + R_minor · cos(ψ)) · cos(φ)   [+Y is up in math; flip for CSS]
+//   Z = (R_major + R_minor · cos(ψ)) · sin(φ)
+//
+// CSS `perspective` on the parent does the depth foreshortening.
+const R_MAJOR = 320;
+const R_MINOR = 170;
 
-const PERSPECTIVE_PX = 1400; // CSS perspective focal distance
+const PERSPECTIVE_PX = 1600;
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
-const CANVAS_WIDTH = 1060;
-const CANVAS_HEIGHT = VISIBLE_DAYS_TOTAL * VERTICAL_PER_DAY + 220;
+const CANVAS_WIDTH = 1100;
+const CANVAS_HEIGHT = 1100;
 
 const CENTER_X = CANVAS_WIDTH / 2;
 const CENTER_Y = CANVAS_HEIGHT / 2;
@@ -151,61 +165,41 @@ export function MoonthView() {
   // Resolve events to per-day buckets within the visible window.
   const eventsByDayMs = useMemo(() => groupEventsByDayMs(events, days), [events, days]);
 
-  // Compute each card's geometry. Sorted by depth so back cards render first.
+  // Compute each card's geometry on the torus surface.
+  // Sort by z so back cards render first (CSS preserve-3d composites
+  // by real 3D z order; the sort still matters for ties).
   const placed = useMemo(() => {
     const arr = days.map((d) => {
       const cardMs = epochMs(d.at);
-      // angle: 180° at the focused-moon-longitude, decreasing as
-      // sidereal longitude increases.
-      const deltaLong = normalizeAngle(d.moonSiderealAngle - focusSiderealAngle);
-      // Use signed delta in (-180, 180] for a clean "shortest forward
-      // distance" from focus longitude.
-      const signedDelta = deltaLong > 180 ? deltaLong - 360 : deltaLong;
-      const angleDeg = 180 - signedDelta;
-      const angleRad = (angleDeg * Math.PI) / 180;
-
-      // Days from animated focus, converted to an angular position on
-      // the year-circle. Past = θ < 0 (rings curve up-and-back); future
-      // = θ > 0 (down-and-back). Extending the same formula for
-      // |daysFromFocus| past 6.5 cycles would carry the ring all the
-      // way around to the other side of the year-circle.
       const daysFromFocus = (cardMs - animatedMs) / 86_400_000;
-      const theta = daysFromFocus * RADIANS_PER_DAY;
-      const ringCenterY = ARC_RADIUS_PX * Math.sin(theta);
-      const ringCenterZ = ARC_RADIUS_PX * (Math.cos(theta) - 1);
 
-      // X / Y in the 2D plane of the card slot. These describe the
-      // CARD CENTER on the rendered surface; the actual perspective
-      // foreshortening (cards far from focus appearing smaller and
-      // more central) is applied in 3D via the Z below.
-      const x = CENTER_X + RX * Math.sin(angleRad);
-      const y = CENTER_Y + ringCenterY - RY * Math.cos(angleRad);
-      const z = ringCenterZ;
+      // φ — major-angle around the year-circle. Focus at π/2 puts the
+      // focused moonth at the FRONT of the torus (closest to camera).
+      // Past = smaller φ (curves up-and-back); future = larger φ
+      // (down-and-back).
+      const phi = Math.PI / 2 - daysFromFocus * (2 * Math.PI / YEAR_DAYS);
 
-      // Normalized arc-depth for opacity fading — 0 at focus, ~1 at
-      // the visible extremes. Independent of the 3D depth above.
-      const arcDepth = Math.min(1, Math.abs(daysFromFocus) / VISIBLE_HALF_DAYS);
+      // ψ — minor-angle around the moonth-cross-section. Driven by
+      // moon's sidereal longitude relative to focus, so the focused
+      // day always lands at ψ=0 (outer face of cross-section, pointing
+      // away from torus axis — at focus that's straight toward camera).
+      const deltaLong = normalizeAngle(d.moonSiderealAngle - focusSiderealAngle);
+      const signedDelta = deltaLong > 180 ? deltaLong - 360 : deltaLong;
+      const psi = (signedDelta * Math.PI) / 180;
 
-      // Angular scale — front-vs-back of the local turn. This is the
-      // within-ring foreshortening (the back of each ring's ellipse
-      // looks smaller). It stays as a manual scale because the ring's
-      // 2D ellipse is itself a stylized projection; cards across the
-      // ring are at the same Z, so CSS perspective doesn't differentiate
-      // them on its own.
-      const t = (1 - Math.cos((angleDeg - 180) * Math.PI / 180)) / 2;
-      const angularScale = 1 - (1 - SCALE_MIN) * t;
+      // Torus surface point: helix the (φ, ψ) coordinates.
+      const radial = R_MAJOR + R_MINOR * Math.cos(psi);
+      const xMath = R_MINOR * Math.sin(psi);
+      const yMath = radial * Math.cos(phi);
+      const zMath = radial * Math.sin(phi);
 
-      // Opacity — combine the angular fade with a depth-based fade so
-      // the back cards of far-away rings recede atmospherically too.
-      const opacity =
-        (1 - (1 - OPACITY_MIN) * t) *
-        Math.max(OPACITY_MIN, 1 - 0.30 * arcDepth);
+      // Map math → CSS. Math Y is up; CSS y is down.
+      const x = CENTER_X + xMath;
+      const y = CENTER_Y - yMath;
+      const z = zMath;
 
-      return { day: d, x, y, z, scale: angularScale, opacity, daysFromFocus, angleDeg };
+      return { day: d, x, y, z, daysFromFocus, phi, psi };
     });
-    // Back cards first — depth (z) wins over 2D y for stacking, since
-    // CSS preserve-3d composites by actual 3D z order. Sort low-to-high
-    // z so deeper cards render first and front cards land on top.
     arr.sort((a, b) => a.z - b.z);
     return arr;
   }, [days, focusSiderealAngle, animatedMs]);
@@ -245,7 +239,7 @@ export function MoonthView() {
             perspectiveOrigin: "50% 50%",
           }}
         >
-          {placed.map(({ day, x, y, z, scale, opacity }) => {
+          {placed.map(({ day, x, y, z }) => {
               const cardMs = epochMs(day.at);
               const isFocus = cardMs === targetMs;
               const isToday =
@@ -257,9 +251,7 @@ export function MoonthView() {
                   className="moonth-card-slot"
                   style={{
                     transform:
-                      `translate3d(${x - CARD_WIDTH / 2}px, ${y - CARD_HEIGHT / 2}px, ${z}px)` +
-                      ` scale(${scale})`,
-                    opacity,
+                      `translate3d(${x - CARD_WIDTH / 2}px, ${y - CARD_HEIGHT / 2}px, ${z}px)`,
                   }}
                 >
                   <DayCard
@@ -280,8 +272,8 @@ export function MoonthView() {
       </div>
 
       <p className="moonth-footer">
-        Helix pitch: {VERTICAL_PER_DAY}px / day · one turn = {SIDEREAL_CYCLE_DAYS.toFixed(2)}{" "}
-        days (sidereal) · {VISIBLE_DAYS_TOTAL} cards visible.
+        Torus: R_major={R_MAJOR}px · R_minor={R_MINOR}px · one moonth = {SIDEREAL_CYCLE_DAYS.toFixed(2)}{" "}
+        sidereal days · {VISIBLE_DAYS_TOTAL} cards visible (whole year).
       </p>
     </section>
   );
