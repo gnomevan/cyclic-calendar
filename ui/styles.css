@@ -601,16 +601,21 @@ main {
 }
 
 .moonth-card-slot {
-  /* left/top are driven by JS interpolation of the focused day, so
-     every card traces the arc rather than cutting a chord through the
-     wheel. Only transform/opacity are CSS-animated here so they stay
-     in sync with the JS rotation duration. */
+  /* The full transform (translate3d + scale) is recomputed in JS each
+     animation frame, so we drive motion in JS rather than letting CSS
+     interpolate — otherwise CSS would double-interpolate against each
+     new frame and lag. Only opacity uses a CSS transition.
+
+     The Z component of translate3d is what bends the helix backward:
+     cards far from focus get a negative Z and the enclosing
+     `.helix-canvas perspective` shrinks/pulls them toward the
+     perspective origin automatically. */
   position: absolute;
+  left: 0;
+  top: 0;
   transform-origin: center center;
-  transition:
-    transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 0.7s ease;
-  will-change: left, top, transform, opacity;
+  transition: opacity 0.7s ease;
+  will-change: transform, opacity;
 }
 
 .moonth-ring-neighbor-near {

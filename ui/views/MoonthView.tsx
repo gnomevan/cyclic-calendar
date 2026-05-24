@@ -55,17 +55,22 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 const SCALE_MIN = 0.42;
 const OPACITY_MIN = 0.32;
 
-// "Bend" — the spiral's axis curves slightly backward at the top and
-// bottom of the visible region, so distant turns recede into the
-// distance and the focus area opens up. The 5 visible turns are
-// modeled as an arc of a 13-turn full year (~360°/13 per turn), so
-// the angular span across the visible spiral is roughly π·5/13. A
-// cosine-shaped falloff traces the circular arc; cards at the edges
-// scale down to BEND_AT_EDGE and pull toward the central column,
-// while focus cards stay full-size and at their natural x.
-const BEND_AT_EDGE = 0.70;
-const ARC_SPAN_RAD = Math.PI * 5 / 13; // ≈ 1.21 rad
-const ARC_NORM = 1 - Math.cos(ARC_SPAN_RAD); // denominator for normalization
+// "Bend" — the spiral's axis curves backward at the top and bottom of
+// the visible region (Z axis, into the screen), so distant turns
+// physically recede in 3D and the focus area opens up. The 5 visible
+// turns model an arc of a 13-turn full year (~360°/13 per turn), so
+// the visible span subtends π·5/13 rad around the year-circle.
+//
+// Each card is given a real Z coordinate via translate3d and the
+// enclosing .helix-canvas has CSS `perspective`, so the projection
+// from 3D → screen is what shrinks distant rings and pulls them
+// toward the perspective origin (the central column). This is the
+// "bicycle tire viewed straight on" feel: we see into the tread at
+// eye level, less so as the tread curves away above and below.
+const ARC_SPAN_RAD = Math.PI * 5 / 13; // ≈ 1.21 rad — visible arc on the year-circle
+const ARC_NORM = 1 - Math.cos(ARC_SPAN_RAD); // denominator for normalized depth ∈ [0,1]
+const PERSPECTIVE_PX = 1400; // CSS perspective focal distance
+const BEND_DEPTH_PX = 520; // Z displacement at the visible extremes (negative = backward)
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
 const CANVAS_WIDTH = 1060;
@@ -164,33 +169,43 @@ export function MoonthView() {
       const daysFromFocus = (cardMs - animatedMs) / 86_400_000;
       const verticalOffset = daysFromFocus * VERTICAL_PER_DAY;
 
-      // Bend factor: how far into the receding curve this card sits.
-      // Cosine-shaped along an arc spanning ARC_SPAN_RAD radians (= 5
-      // turns of the 13-turn year). 1.0 at the focus center, BEND_AT_EDGE
-      // at the visible extremes. Used both to shrink card scale and to
-      // pull each card's horizontal position toward CENTER_X, so the
-      // top and bottom of the spiral visibly recede.
+      // X / Y in the 2D plane of the card slot. These describe the
+      // CARD CENTER on the rendered surface; the actual perspective
+      // foreshortening (cards far from focus appearing smaller and
+      // more central) is applied in 3D via the Z below.
+      const x = CENTER_X + RX * Math.sin(angleRad);
+      const y = CENTER_Y + verticalOffset - RY * Math.cos(angleRad);
+
+      // Z (depth) — the bend. Each card's ring sits on a circular arc
+      // spanning ARC_SPAN_RAD radians of the year-circle. Cards at the
+      // focus are at z=0; cards at the visible extremes are pushed
+      // back by BEND_DEPTH_PX. CSS perspective on the parent does the
+      // rest of the projection automatically.
       const verticalT = Math.min(1, Math.abs(daysFromFocus) / VISIBLE_HALF_DAYS);
       const arcDepth = (1 - Math.cos(verticalT * ARC_SPAN_RAD)) / ARC_NORM; // 0 → 1
-      const bend = 1 - (1 - BEND_AT_EDGE) * arcDepth; // 1 → BEND_AT_EDGE
+      const z = -BEND_DEPTH_PX * arcDepth;
 
-      const xRaw = CENTER_X + RX * Math.sin(angleRad);
-      const x = CENTER_X + (xRaw - CENTER_X) * bend;
-      const y = CENTER_Y + verticalOffset - RY * Math.cos(angleRad) * bend;
-
-      // Angular scale (front-vs-back of the local turn).
+      // Angular scale — front-vs-back of the local turn. This is the
+      // within-ring foreshortening (the back of each ring's ellipse
+      // looks smaller). It stays as a manual scale because the ring's
+      // 2D ellipse is itself a stylized projection; cards across the
+      // ring are at the same Z, so CSS perspective doesn't differentiate
+      // them on its own.
       const t = (1 - Math.cos((angleDeg - 180) * Math.PI / 180)) / 2;
       const angularScale = 1 - (1 - SCALE_MIN) * t;
-      const scale = angularScale * bend;
-      // Opacity: combine the angular fade with a gentle bend-based fade.
+
+      // Opacity — combine the angular fade with a depth-based fade so
+      // the back cards of far-away rings recede atmospherically too.
       const opacity =
         (1 - (1 - OPACITY_MIN) * t) *
         Math.max(OPACITY_MIN, 1 - 0.30 * arcDepth);
 
-      return { day: d, x, y, scale, opacity, daysFromFocus, angleDeg };
+      return { day: d, x, y, z, scale: angularScale, opacity, daysFromFocus, angleDeg };
     });
-    // Back cards first (so front cards render on top).
-    arr.sort((a, b) => a.y - b.y);
+    // Back cards first — depth (z) wins over 2D y for stacking, since
+    // CSS preserve-3d composites by actual 3D z order. Sort low-to-high
+    // z so deeper cards render first and front cards land on top.
+    arr.sort((a, b) => a.z - b.z);
     return arr;
   }, [days, focusSiderealAngle, animatedMs]);
 
@@ -221,10 +236,17 @@ export function MoonthView() {
 
         <div
           className="helix-canvas"
-          style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, position: "relative" }}
+          style={{
+            width: CANVAS_WIDTH,
+            height: CANVAS_HEIGHT,
+            position: "relative",
+            perspective: `${PERSPECTIVE_PX}px`,
+            perspectiveOrigin: "50% 50%",
+            transformStyle: "preserve-3d",
+          }}
         >
-          <div className="helix-cards">
-            {placed.map(({ day, x, y, scale, opacity }) => {
+          <div className="helix-cards" style={{ transformStyle: "preserve-3d" }}>
+            {placed.map(({ day, x, y, z, scale, opacity }) => {
               const cardMs = epochMs(day.at);
               const isFocus = cardMs === targetMs;
               const isToday =
@@ -235,11 +257,10 @@ export function MoonthView() {
                   key={cardMs}
                   className="moonth-card-slot"
                   style={{
-                    left: `${x - CARD_WIDTH / 2}px`,
-                    top: `${y - CARD_HEIGHT / 2}px`,
-                    transform: `scale(${scale})`,
+                    transform:
+                      `translate3d(${x - CARD_WIDTH / 2}px, ${y - CARD_HEIGHT / 2}px, ${z}px)` +
+                      ` scale(${scale})`,
                     opacity,
-                    zIndex: Math.round(y),
                   }}
                 >
                   <DayCard
