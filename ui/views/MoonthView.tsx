@@ -93,19 +93,32 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 // CSS `perspective` on the parent handles depth foreshortening.
 // Torus dimensions. With YEAR_DAYS now 36 525, the visible 5-cycle
 // window subtends only ~0.023 rad of the major circle, so sin(N·RATE)
-// ≈ N·RATE and the visible y range is ≈ R_MAJOR · 2 · N · 2π / YEAR_DAYS.
-// We pick R_MAJOR so the per-day pitch dy/dt = R_MAJOR · RATE = 8 px/day
-// (matching the live wheel):
+// ≈ N·RATE and per-day pitch dy/dt = R_MAJOR · 2π / YEAR_DAYS. Picking
+// R_MAJOR so pitch matches the live wheel's 8 px/day:
 //
 //   R_MAJOR = 8 · YEAR_DAYS / (2π) ≈ 46 500
 //
-// Cross-section radius wide enough for 28 × 105-px cards with the same
-// gentle overlap the live wheel had at its front:
+// Cross-section is an ELLIPSOID, not a circle — cheating the geometry
+// per user request so the visible 5 rings read like the live wheel:
 //
-//   R_MINOR ≈ 350 (cross-section circumference ≈ 2200 px; 28 × 105 =
-//                  2940 px ⇒ ~30 % overlap, close to the live front).
+//   R_MINOR_X: horizontal extent. Wide enough that 28 × 105-px cards
+//              just-touch at the front of each ring, not overlap.
+//              Adjacent days span 13.18° at the front:
+//                 spacing = R_MINOR_X · sin(13.18°) · scale_at_z ≈ 105
+//                 ⇒ R_MINOR_X ≈ 480
+//
+//   R_MINOR_Y: vertical extent. Matches the live wheel's RY=65; gives
+//              the tilted-ellipse look where the focused day sits at
+//              the bottom of its ring and back-of-cycle days sit at
+//              the top — so back cards aren't occluded by front cards.
+//
+//   R_MINOR_Z: depth extent. Sized so back of focus ring (z = −2·R_Z)
+//              hits live's 0.42 scale with PERSPECTIVE_PX = 500:
+//                 P / (P + 2·R_Z) = 0.42  ⇒  R_Z = 0.69·P ≈ 345
 const R_MAJOR = Math.round((8 * YEAR_DAYS) / (2 * Math.PI));
-const R_MINOR = 350;
+const R_MINOR_X = 480;
+const R_MINOR_Y = 65;
+const R_MINOR_Z = 345;
 
 // Perspective tuned so the front-to-back ratio inside a single ring
 // matches the live wheel's 1.0 → 0.42 angularScale curve:
@@ -218,24 +231,43 @@ export function MoonthView() {
       const signedDelta = deltaLong > 180 ? deltaLong - 360 : deltaLong;
       const psi = (signedDelta * Math.PI) / 180;
 
-      // Edge-on torus surface (major circle in YZ plane, axis along X).
-      const radial = R_MAJOR + R_MINOR * Math.cos(psi);
-      const xMath = R_MINOR * Math.sin(psi);
-      const yMath = radial * Math.cos(phi);
-      // Shift z so the front of focus ring (sin(phi)=1, cos(psi)=1)
-      // lands at z=0. With R_MAJOR ≈ 46 500 (100-year ring) this brings
-      // every visible card into the range [−2·R_MINOR, 0], which CSS
-      // perspective handles cleanly. Without this shift, cards would be
-      // tens of thousands of pixels in front of the perspective focal
-      // plane and the projection would invert.
-      const zMath = radial * Math.sin(phi) - (R_MAJOR + R_MINOR);
+      // Card position on the ellipsoidal-cross-section torus.
+      //
+      // Cross-section components (independent X, Y, Z extents):
+      //   x_within = R_MINOR_X · sin(ψ)   horizontal spread
+      //   y_within = −R_MINOR_Y · cos(ψ)  vertical tilt — focused day
+      //                                    (ψ=0) sits below ring center,
+      //                                    back of cycle (ψ=π) sits above
+      //   z_within = R_MINOR_Z · cos(ψ)   depth: front of ring closer
+      //                                    to camera, back further away
+      //
+      // Major-circle: at this scale (100-year ring) sin(phi) ≈ 1 over
+      // the whole visible window, so the major contribution is mostly
+      // a small phi-dependent y shift and a near-constant z bias.
+      const xMath = R_MINOR_X * Math.sin(psi);
+      const yMath = R_MAJOR * Math.cos(phi) - R_MINOR_Y * Math.cos(psi);
+      // Shift z so the front of focus ring (ψ=0, phi=π/2) lands at
+      // z=0. Without the shift, cards would be tens of thousands of
+      // pixels in front of the CSS perspective focal plane and the
+      // projection would invert.
+      const zMath =
+        R_MAJOR * Math.sin(phi) +
+        R_MINOR_Z * Math.cos(psi) -
+        (R_MAJOR + R_MINOR_Z);
 
       // Map math → CSS. Math Y is up; CSS y is down.
       const x = CENTER_X + xMath;
       const y = CENTER_Y - yMath;
       const z = zMath;
 
-      return { day: d, x, y, z, daysFromFocus, phi, psi };
+      // Opacity gradient (matches the live wheel) — front of ring full
+      // opaque, back fades to OPACITY_MIN so it stays visible without
+      // dominating. The cross-section's Y tilt already separates front-
+      // and back-cards on screen, so this gradient is the icing.
+      const t = (1 - Math.cos(psi)) / 2; // 0 at front, 1 at back
+      const opacity = 1 - (1 - 0.32) * t;
+
+      return { day: d, x, y, z, opacity, daysFromFocus, phi, psi };
     });
     arr.sort((a, b) => a.z - b.z);
     return arr;
@@ -276,7 +308,7 @@ export function MoonthView() {
             perspectiveOrigin: "50% 50%",
           }}
         >
-          {placed.map(({ day, x, y, z }) => {
+          {placed.map(({ day, x, y, z, opacity }) => {
               const cardMs = epochMs(day.at);
               const isFocus = cardMs === targetMs;
               const isToday =
@@ -289,6 +321,7 @@ export function MoonthView() {
                   style={{
                     transform:
                       `translate3d(${x - CARD_WIDTH / 2}px, ${y - CARD_HEIGHT / 2}px, ${z}px)`,
+                    opacity,
                   }}
                 >
                   <DayCard
@@ -309,7 +342,7 @@ export function MoonthView() {
       </div>
 
       <p className="moonth-footer">
-        Torus: R_major={R_MAJOR}px · R_minor={R_MINOR}px · one moonth = {SIDEREAL_CYCLE_DAYS.toFixed(2)}{" "}
+        Torus: R_major={R_MAJOR}px · R_minor={R_MINOR_X}/{R_MINOR_Y}/{R_MINOR_Z}px · one moonth = {SIDEREAL_CYCLE_DAYS.toFixed(2)}{" "}
         sidereal days · {VISIBLE_DAYS_TOTAL} cards visible (whole year).
       </p>
     </section>

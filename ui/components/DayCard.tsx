@@ -69,7 +69,7 @@ interface DayCardProps {
 }
 
 export function DayCard({
-  moonthDay,
+  moonthDay: _moonthDay, // retained in props for upstream callers, unused in the redesign
   moonAngle,
   moonSiderealAngle,
   at,
@@ -83,8 +83,14 @@ export function DayCard({
   const g = toGregorianUTC(at);
   const pad = (n: number) => String(n).padStart(2, "0");
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const greMonth = months[g.month - 1]!;
   const greDay = pad(g.day);
+  const weekday =
+    weekdays[
+      new Date(Date.UTC(g.year, g.month - 1, g.day)).getUTCDay()
+    ]!;
+  void _moonthDay;
 
   const classes = ["day-card", `day-card-${variant}`];
   if (isFocus) classes.push("day-card-focused");
@@ -98,10 +104,8 @@ export function DayCard({
   }
 
   function handleBodyClick(e: React.MouseEvent<HTMLDivElement>) {
-    // Click on an existing event button shouldn't trigger create.
     if ((e.target as HTMLElement).closest(".day-card-event-btn")) return;
     if (isFocus) {
-      // Already focused — second click commits to creation.
       startCreatingFromDay(at);
     } else {
       focusThisCard();
@@ -113,27 +117,31 @@ export function DayCard({
     setEditingEventId(eventId);
   }
 
+  // Moon glyph fills most of the card; zodiac glyph sits over it like
+  // a tattoo on the moon. Date top-center with the 3-letter weekday to
+  // its left. No moonth-day number any more.
+  const moonGlyphSize = Math.round(width * 0.84);
+
   return (
     <div className={classes.join(" ")} style={{ width, height }}>
       <div className="day-card-head">
-        <span className="day-card-moon-cluster">
-          <MoonGlyph angle={moonAngle} size={22} />
-          <ZodiacGlyph angle={moonSiderealAngle} size={14} />
+        <span className="day-card-weekday">{weekday}</span>
+        <span className="day-card-date">
+          {greMonth} {greDay}
         </span>
-        <span className="day-card-number">{moonthDay}</span>
-        <div className="day-card-greg">
-          <span className="day-card-greg-month">{greMonth}</span>
-          <span className="day-card-greg-day">{greDay}</span>
-        </div>
       </div>
       <div
         className="day-card-body"
         onClick={handleBodyClick}
         title={isFocus ? "Click to add an event here" : "Click to focus this day"}
       >
-        {events.length === 0 ? (
-          <div className="day-card-empty" aria-hidden="true" />
-        ) : (
+        <div className="day-card-moon-stage" aria-hidden="true">
+          <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
+          <span className="day-card-moon-tattoo">
+            <ZodiacGlyph angle={moonSiderealAngle} size={Math.round(moonGlyphSize * 0.42)} />
+          </span>
+        </div>
+        {events.length > 0 && (
           <ul className="day-card-events">
             {visible.map(({ event, at: occurrenceAt }) => (
               <li key={event.id}>

@@ -689,84 +689,75 @@ main {
               0 0 16px rgba(159, 199, 232, 0.45);
 }
 
+/* Head — weekday (3-letter) on the left, calendar date centered to its
+   right. No moonth-day number any more; the moon glyph itself is the
+   day's visual anchor in the body. */
 .day-card-head {
   display: flex;
-  align-items: center;
-  gap: 5px;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
   padding: 5px 7px 4px;
   border-bottom: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.01em;
+  line-height: 1;
 }
 
-.day-card-head svg {
-  flex: 0 0 auto;
+.day-card-weekday {
+  font-size: 0.7rem;
+  color: var(--fg-dim);
+  text-transform: uppercase;
 }
 
-/* The moon-phase glyph and the zodiac-sign glyph sit together in
-   one cluster — moon-shape (what the moon looks like) and Vedic-
-   sidereal sign symbol (where the moon is). Distinct by form. */
-.day-card-moon-cluster {
-  display: inline-flex;
+.day-card-date {
+  font-size: 0.85rem;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.day-card-neighbor-near .day-card-date,
+.day-card-neighbor-far .day-card-date {
+  color: var(--fg-dim);
+}
+
+/* Moon stage — the moon glyph takes most of the card and the zodiac
+   sign glyph sits centered over it like a tattoo on the moon.
+   Absolutely positioned so the events list (when present) can flow
+   over it without fighting for vertical space. */
+.day-card-moon-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.day-card-moon-stage svg {
+  display: block;
   flex: 0 0 auto;
+}
+
+.day-card-moon-tattoo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The tattoo sits over the moon's surface — give it a soft glow so
+     it reads against the light AND dark parts of the phase glyph. */
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.55), 0 0 8px rgba(0, 0, 0, 0.35);
+  mix-blend-mode: difference;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .zodiac-glyph {
   font-family: ui-sans-serif, system-ui, sans-serif;
   user-select: none;
-}
-
-.day-card-number {
-  flex: 1;
-  text-align: center;
-  font-size: 1.25rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.day-card-focus .day-card-number {
-  color: #d4a373;
-}
-
-.day-card-neighbor-near .day-card-number {
-  color: #8aa0b8;
-}
-
-.day-card-neighbor-far .day-card-number {
-  color: #6a7c8e;
-}
-
-.day-card-focused .day-card-number {
-  color: var(--accent);
-}
-
-.day-card-greg {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  line-height: 1;
-  flex: 0 0 auto;
-  letter-spacing: 0.01em;
-}
-
-.day-card-greg-month {
-  font-size: 0.6rem;
-  color: var(--fg-dim);
-  text-transform: uppercase;
-}
-
-.day-card-greg-day {
-  font-size: 0.82rem;
-  color: var(--fg);
-  margin-top: 1px;
-}
-
-.day-card-neighbor-near .day-card-greg-day,
-.day-card-neighbor-far .day-card-greg-day {
-  color: var(--fg-dim);
 }
 
 .day-card-events {
@@ -778,6 +769,15 @@ main {
   gap: 2px;
   flex: 1;
   overflow: hidden;
+  position: relative; /* lifts above the absolutely-positioned moon stage */
+  align-self: flex-end;
+  width: 100%;
+  background: linear-gradient(
+    to top,
+    rgba(15, 18, 23, 0.92) 0%,
+    rgba(15, 18, 23, 0.78) 60%,
+    rgba(15, 18, 23, 0) 100%
+  );
 }
 
 .day-card-events li {
@@ -845,20 +845,17 @@ main {
   font-style: italic;
 }
 
-.day-card-empty {
-  flex: 1;
-}
-
 .day-card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   cursor: pointer;
   min-height: 0;
+  position: relative;
 }
 
-.day-card-body:hover .day-card-empty {
-  background: rgba(212, 163, 115, 0.06);
+.day-card-body:hover .day-card-moon-stage {
+  filter: brightness(1.15);
 }
 
 @media (max-width: 700px) {
