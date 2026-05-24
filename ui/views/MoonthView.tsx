@@ -46,11 +46,13 @@ import { wheelRegistry } from "../wheels.js";
 const SIDEREAL_CYCLE_DAYS = 27.32;
 const YEAR_DAYS = 365.25;
 
-// Show the whole year for now so the torus shape is obvious.
-// We can zoom in on a smaller window once the geometry is right.
-const VISIBLE_HALF_DAYS = Math.floor(YEAR_DAYS / 2); // ≈ 182 days each side = full year
+// 5 sidereal cycles visible at a time — same window as the live
+// version. The remaining ~8 cycles' worth of cards live off-screen on
+// the torus, behind us; we just don't render them.
+const VISIBLE_HALF_DAYS = 68;
 
-const CARD_WIDTH = 50;
+// Card width matches the live version (readable).
+const CARD_WIDTH = 105;
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
 // Torus geometry — axis along X (horizontal, perpendicular to view).
@@ -82,17 +84,28 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 //   Z = (R_MAJOR + R_MINOR · cos(ψ)) · sin(φ)
 //
 // CSS `perspective` on the parent handles depth foreshortening.
-// Edge-on torus (no view tilt). Bigger R_MAJOR = bigger gap between
-// the top and bottom "lobes" of cards in the silhouette (the donut's
-// "hole" pulled apart vertically). Bigger R_MINOR = wider tube =
-// less card overlap around each cross-section.
-const R_MAJOR = 650;
-const R_MINOR = 240;
+// Torus dimensions tuned so the visible 5-cycle arc roughly matches
+// the live version's vertical extent (~1090 px) and the cross-section
+// is wide enough for 28 × 105-px cards with the same gentle overlap
+// the live wheel had at its front:
+//
+//   visible y range = 2 · R_MAJOR · sin(VISIBLE_HALF_DAYS · RATE)
+//                   = 2 · R_MAJOR · sin(1.17 rad) ≈ 1.84 · R_MAJOR
+//   For ~1090 px: R_MAJOR ≈ 591.
+//
+//   cross-section circumference = 2π · R_MINOR. For 28 × 105 = 2940 px
+//   of card with ~10 % overlap: R_MINOR ≈ 350.
+const R_MAJOR = 591;
+const R_MINOR = 350;
 
-const PERSPECTIVE_PX = 1600;
+// Large perspective focal distance ⇒ mild foreshortening. Cards at
+// the visible extremes shrink by only ~15 %, so the helix reads as
+// a stack of rings with a hint of 3D depth rather than a dramatic
+// vanishing tunnel.
+const PERSPECTIVE_PX = 5000;
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
-const CANVAS_WIDTH = 800;
+const CANVAS_WIDTH = 1100;
 const CANVAS_HEIGHT = 1900;
 
 const CENTER_X = CANVAS_WIDTH / 2;
