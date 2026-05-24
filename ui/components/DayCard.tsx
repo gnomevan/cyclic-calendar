@@ -161,22 +161,19 @@ export function DayCard({
           </span>
         </div>
         <div className="day-card-meta">
-          <div
-            className={
-              phaseEvent
-                ? "day-card-phase day-card-phase-anchor"
-                : "day-card-phase"
-            }
-          >
-            {phaseLabel}
-          </div>
-          <div className="day-card-datestamp">
-            <span className="day-card-weekday">{weekday}</span>
-            <span className="day-card-date">
-              {greMonth} {greDay}
-            </span>
-          </div>
+          <span className="day-card-weekday">{weekday}</span>
+          <span className="day-card-month">{greMonth}</span>
+          <span className="day-card-day">{greDay}</span>
         </div>
+      </div>
+      <div
+        className={
+          phaseEvent
+            ? "day-card-phase day-card-phase-anchor"
+            : "day-card-phase"
+        }
+      >
+        {phaseLabel}
       </div>
       {events.length > 0 && (
         <ul className="day-card-events">

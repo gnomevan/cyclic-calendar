@@ -689,11 +689,13 @@ main {
               0 0 16px rgba(159, 199, 232, 0.45);
 }
 
-/* Phase tag — first line of the meta stack. Plain phase name on
-   most days ("Waxing Gibbous") and the exact clock time on the
-   four primary phase days ("Full: 10:02pm"). */
+/* Phase tag — full-width row below the moon + day-stack. Plain
+   phase name on most days ("Waxing Gibbous") and the exact clock
+   time on the four primary phase days ("Full: 10:02pm"). */
 .day-card-phase {
   font-size: 0.62rem;
+  text-align: center;
+  padding: 2px 4px;
   color: rgba(200, 152, 104, 0.75);
   font-family: ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0.02em;
@@ -701,22 +703,13 @@ main {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 100%;
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(160, 110, 60, 0.18);
 }
 
 .day-card-phase-anchor {
   color: #d4a373;
   font-weight: 600;
-}
-
-/* Date stamp — weekday + month/day on the next line of the meta
-   stack. */
-.day-card-datestamp {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.01em;
 }
 
 .day-card-weekday {
@@ -761,9 +754,30 @@ main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
   align-items: flex-start;
-  line-height: 1.05;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.01em;
+}
+
+.day-card-weekday {
+  font-size: 0.66rem;
+  color: rgba(200, 152, 104, 0.75);
+  text-transform: uppercase;
+}
+
+.day-card-month {
+  font-size: 0.7rem;
+  color: rgba(200, 152, 104, 0.7);
+  text-transform: uppercase;
+}
+
+.day-card-day {
+  font-size: 0.95rem;
+  color: #c89868;
+  font-variant-numeric: tabular-nums;
 }
 
 .day-card-moon-stage svg {
