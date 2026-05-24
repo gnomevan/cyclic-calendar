@@ -635,8 +635,11 @@ main {
 
 /* ----- Day card (landscape, 94 × 72) ----- */
 .day-card {
-  background: var(--bg);
-  border: 1px solid var(--line);
+  /* ~10 % opaque amber-tinted dark — cards barely tint the helix
+     behind them, so the whole stack reads as a translucent column. */
+  background: rgba(34, 24, 16, 0.10);
+  color: #c89868; /* gentle golden-amber text */
+  border: 1px solid rgba(160, 110, 60, 0.18);
   border-radius: 4px;
   display: flex;
   flex-direction: column;
@@ -646,21 +649,21 @@ main {
 }
 
 .day-card:hover {
-  border-color: var(--fg-dim);
+  border-color: rgba(200, 152, 104, 0.55);
 }
 
 .day-card-focus {
-  border-color: #3a342c;
+  border-color: rgba(200, 152, 104, 0.22);
 }
 
 .day-card-neighbor-near {
-  border-color: #1a2230;
-  background: #0c1015;
+  border-color: rgba(160, 110, 60, 0.12);
+  background: rgba(34, 24, 16, 0.08);
 }
 
 .day-card-neighbor-far {
-  border-color: #141821;
-  background: #0a0d12;
+  border-color: rgba(160, 110, 60, 0.08);
+  background: rgba(34, 24, 16, 0.05);
 }
 
 /* Focused card — the one rotated to the bottom-center (the user's
@@ -707,19 +710,19 @@ main {
 
 .day-card-weekday {
   font-size: 0.7rem;
-  color: var(--fg-dim);
+  color: rgba(200, 152, 104, 0.7); /* dim amber */
   text-transform: uppercase;
 }
 
 .day-card-date {
   font-size: 0.85rem;
-  color: var(--fg);
+  color: #c89868; /* same gentle amber as the card */
   font-variant-numeric: tabular-nums;
 }
 
 .day-card-neighbor-near .day-card-date,
 .day-card-neighbor-far .day-card-date {
-  color: var(--fg-dim);
+  color: rgba(200, 152, 104, 0.55);
 }
 
 /* Moon stage — fixed-height block pinned to the top of the card.
@@ -747,17 +750,17 @@ main {
   left: 50%;
   transform: translate(-50%, -50%);
   font-weight: 600;
-  color: var(--fg);
+  color: #d9b485; /* matches the amber moon */
   pointer-events: none;
-  /* The tattoo lies over both the lit and shadowed halves of the
-     moon. A 4-direction dark outline keeps the glyph readable against
-     the white side; a soft blurred drop-shadow grounds it on either. */
+  /* Gentle golden-red outline so the glyph reads against both the
+     lit (amber) and shadowed (warm dark) halves of the moon, plus a
+     soft drop shadow to ground it. */
   text-shadow:
-    -1px -1px 0 rgba(0, 0, 0, 0.9),
-     1px -1px 0 rgba(0, 0, 0, 0.9),
-    -1px  1px 0 rgba(0, 0, 0, 0.9),
-     1px  1px 0 rgba(0, 0, 0, 0.9),
-     0    2px 4px rgba(0, 0, 0, 0.55);
+    -1px -1px 0 rgba(110, 38, 22, 0.85),
+     1px -1px 0 rgba(110, 38, 22, 0.85),
+    -1px  1px 0 rgba(110, 38, 22, 0.85),
+     1px  1px 0 rgba(110, 38, 22, 0.85),
+     0    2px 4px rgba(60, 18, 10, 0.5);
 }
 
 .zodiac-glyph {
