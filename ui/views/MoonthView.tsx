@@ -441,10 +441,17 @@ function groupEventsByDayMs(
 ): Map<number, DayEventOccurrence[]> {
   const result = new Map<number, DayEventOccurrence[]>();
   if (days.length === 0) return result;
+  const dayMs = 86_400_000;
   const startMs = epochMs(days[0]!.at) - 12 * 60 * 60 * 1000; // midnight of first day
   const endMs = epochMs(days[days.length - 1]!.at) + 12 * 60 * 60 * 1000; // midnight after last day
+
+  function bucketKeyFor(ms: number): number {
+    return Math.floor((ms - startMs) / dayMs) * dayMs + startMs + 12 * 60 * 60 * 1000;
+  }
+
   for (const event of events) {
     let cursor = instantFromEpochMs(startMs);
+    const span = event.durationDays ?? 0;
     for (let i = 0; i < 200; i++) {
       let r;
       try {
@@ -455,18 +462,27 @@ function groupEventsByDayMs(
       if (!r) break;
       const ms = epochMs(r.at);
       if (ms >= endMs) break;
-      // Bucket to the day card whose noon is within ±12h.
-      const dayMidpointMs = Math.floor((ms - startMs) / 86_400_000) * 86_400_000 + startMs + 12 * 60 * 60 * 1000;
-      if (dayMidpointMs >= startMs && dayMidpointMs <= endMs) {
-        const list = result.get(dayMidpointMs) ?? [];
-        list.push({ event, at: r.at });
-        result.set(dayMidpointMs, list);
+
+      // Emit one entry per spanned day. day 0 is "start" (or "single"
+      // when span = 0); days 1..span are "continuation".
+      for (let d = 0; d <= span; d++) {
+        const dayKey = bucketKeyFor(ms + d * dayMs);
+        if (dayKey < startMs || dayKey > endMs) continue;
+        const position: DayEventOccurrence["position"] =
+          d === 0 ? (span === 0 ? "single" : "start") : "continuation";
+        const list = result.get(dayKey) ?? [];
+        list.push({ event, at: r.at, position });
+        result.set(dayKey, list);
       }
+
       if (ms <= epochMs(cursor)) break;
       cursor = instantFromEpochMs(ms + 1000);
     }
   }
+
   for (const occurrences of result.values()) {
+    // Sort so the START day of an event appears with its title; on
+    // continuation days the colored line is fine in chronological order.
     occurrences.sort((a, b) => epochMs(a.at) - epochMs(b.at));
   }
   return result;

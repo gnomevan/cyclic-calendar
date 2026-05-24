@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   epochMs,
   toGregorianUTC,
@@ -35,6 +36,13 @@ export type DayCardVariant = "focus" | "neighbor-near" | "neighbor-far";
 export interface DayEventOccurrence {
   event: CalendarEvent;
   at: Instant;
+  /**
+   * Where this day sits in the event's span:
+   *   "single"       — single-day event (durationDays = 0)
+   *   "start"        — first day of a multi-day event
+   *   "continuation" — any subsequent day of a multi-day event
+   */
+  position?: "single" | "start" | "continuation";
 }
 
 const MAX_VISIBLE_EVENTS = 3;
@@ -180,22 +188,49 @@ export function DayCard({
       </div>
       {events.length > 0 && (
         <ul className="day-card-events">
-          {visible.map(({ event, at: occurrenceAt }) => (
-            <li key={event.id}>
-              <button
-                type="button"
-                className="day-card-event-btn"
-                title={event.description ?? event.name}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEventClick(event.id);
-                }}
-              >
-                <time>{formatTime(occurrenceAt)}</time>
-                <span className="day-card-event-name">{event.name}</span>
-              </button>
-            </li>
-          ))}
+          {visible.map(({ event, at: occurrenceAt, position }) => {
+            const eventColor = event.color ?? "var(--accent)";
+            const isContinuation = position === "continuation";
+            const isMultiDayStart = position === "start";
+            const styleVar = { "--event-color": eventColor } as CSSProperties;
+            if (isContinuation) {
+              // Continuation day — only a colored line, no text. Click
+              // still opens the editor for the underlying event.
+              return (
+                <li
+                  key={`${event.id}-cont-${epochMs(occurrenceAt)}`}
+                  className="day-card-event-continuation"
+                  style={styleVar}
+                  title={event.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEventClick(event.id);
+                  }}
+                />
+              );
+            }
+            return (
+              <li key={event.id}>
+                <button
+                  type="button"
+                  className={
+                    isMultiDayStart
+                      ? "day-card-event-btn day-card-event-btn-spanstart"
+                      : "day-card-event-btn"
+                  }
+                  style={styleVar}
+                  title={event.description ?? event.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEventClick(event.id);
+                  }}
+                >
+                  <time>{formatTime(occurrenceAt)}</time>
+                  <span className="day-card-event-name">{event.name}</span>
+                </button>
+              </li>
+            );
+          })}
           {overflow > 0 && (
             <li className="day-card-overflow">+{overflow} more</li>
           )}

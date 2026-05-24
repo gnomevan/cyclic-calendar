@@ -1015,13 +1015,46 @@ main {
   position: absolute;
   left: 2px;
   top: 0;
-  color: var(--accent);
+  color: var(--event-color, var(--accent));
   font-size: 0.95rem;
   line-height: 1.05;
 }
 
+/* Multi-day START — colored line trails from the title to the right
+   edge of the row, signaling that the event continues on the next
+   card. */
+.day-card-event-btn-spanstart::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  height: 2px;
+  /* Stretches to fill whatever horizontal space is left of the row. */
+  width: 14px;
+  background: var(--event-color, var(--accent));
+  border-radius: 1px;
+}
+
 .day-card-event-btn:hover {
-  background: rgba(212, 163, 115, 0.12);
+  background: rgba(212, 163, 115, 0.08);
+}
+
+/* Continuation day — a stand-alone bar showing the event's color
+   spanning the full row width, no title. Hover/click still target
+   the underlying event. */
+.day-card-event-continuation {
+  width: 100%;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--event-color, var(--accent));
+  cursor: pointer;
+  margin: 1px 0;
+  opacity: 0.85;
+  transition: opacity 0.1s ease;
+}
+
+.day-card-event-continuation:hover {
+  opacity: 1;
 }
 
 .day-card-event-btn:focus-visible {
