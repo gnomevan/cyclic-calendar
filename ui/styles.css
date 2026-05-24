@@ -748,6 +748,15 @@ main {
   font-weight: 600;
   color: var(--fg);
   pointer-events: none;
+  /* The tattoo lies over both the lit and shadowed halves of the
+     moon. A 4-direction dark outline keeps the glyph readable against
+     the white side; a soft blurred drop-shadow grounds it on either. */
+  text-shadow:
+    -1px -1px 0 rgba(0, 0, 0, 0.9),
+     1px -1px 0 rgba(0, 0, 0, 0.9),
+    -1px  1px 0 rgba(0, 0, 0, 0.9),
+     1px  1px 0 rgba(0, 0, 0, 0.9),
+     0    2px 4px rgba(0, 0, 0, 0.55);
 }
 
 .zodiac-glyph {
