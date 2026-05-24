@@ -136,7 +136,10 @@ export function DayCard({
   //   │ • event 1           │
   //   │ • event 2           │
   //   └─────────────────────┘
-  const moonGlyphSize = Math.round(width * 0.36);
+  // Moon sized so it takes up most of the row's horizontal space —
+  // anything left over after the moon + 6-px gap is just enough for
+  // the 3-line MON/MAY/25 stack to read cleanly.
+  const moonGlyphSize = Math.round(width * 0.55);
 
   const phaseLabel = phaseEvent
     ? `${PHASE_KIND_LABEL[phaseEvent.kind]}: ${formatClockTime(phaseEvent.at)}`
