@@ -35,6 +35,10 @@ interface StoredEvent {
   description?: string;
   ruleJson: string;
   isOrigin?: boolean;
+  startTime?: string;
+  endTime?: string;
+  durationDays?: number;
+  color?: string;
 }
 
 function load(): CalendarEvent[] {
@@ -60,6 +64,10 @@ function load(): CalendarEvent[] {
       };
       if (s.description !== undefined) event.description = s.description;
       if (s.isOrigin) event.isOrigin = true;
+      if (s.startTime !== undefined) event.startTime = s.startTime;
+      if (s.endTime !== undefined) event.endTime = s.endTime;
+      if (s.durationDays !== undefined) event.durationDays = s.durationDays;
+      if (s.color !== undefined) event.color = s.color;
       events.push(event);
     } catch (err) {
       if (err instanceof SerializationError) {
@@ -83,6 +91,10 @@ function persist(events: CalendarEvent[]): void {
     };
     if (e.description !== undefined) out.description = e.description;
     if (e.isOrigin) out.isOrigin = true;
+    if (e.startTime !== undefined) out.startTime = e.startTime;
+    if (e.endTime !== undefined) out.endTime = e.endTime;
+    if (e.durationDays !== undefined) out.durationDays = e.durationDays;
+    if (e.color !== undefined) out.color = e.color;
     return out;
   });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
@@ -122,6 +134,19 @@ export interface NewEventInput {
   description?: string;
   rule: CalendarEvent["rule"];
   isOrigin?: boolean;
+  startTime?: string;
+  endTime?: string;
+  durationDays?: number;
+  color?: string;
+}
+
+function applyPresentationFields(target: CalendarEvent, input: NewEventInput): void {
+  if (input.description !== undefined) target.description = input.description;
+  if (input.isOrigin) target.isOrigin = true;
+  if (input.startTime !== undefined) target.startTime = input.startTime;
+  if (input.endTime !== undefined) target.endTime = input.endTime;
+  if (input.durationDays !== undefined) target.durationDays = input.durationDays;
+  if (input.color !== undefined) target.color = input.color;
 }
 
 export function addEvent(input: NewEventInput): CalendarEvent {
@@ -131,8 +156,7 @@ export function addEvent(input: NewEventInput): CalendarEvent {
     name: input.name,
     rule: input.rule,
   };
-  if (input.description !== undefined) event.description = input.description;
-  if (input.isOrigin) event.isOrigin = true;
+  applyPresentationFields(event, input);
   commit([...getSnapshot(), event]);
   return event;
 }
@@ -153,8 +177,7 @@ export function updateEvent(id: string, input: NewEventInput): CalendarEvent | n
     name: input.name,
     rule: input.rule,
   };
-  if (input.description !== undefined) updated.description = input.description;
-  if (input.isOrigin) updated.isOrigin = true;
+  applyPresentationFields(updated, input);
   const next = [...current];
   next[idx] = updated;
   commit(next);
