@@ -45,7 +45,7 @@ import { wheelRegistry } from "../wheels.js";
 
 const VISIBLE_HALF_DAYS = 68; // ~2.5 sidereal cycles each side; 5 visible total
 const SIDEREAL_CYCLE_DAYS = 27.32;
-const VERTICAL_PER_DAY = 8; // px per day vertically along the spiral
+const VERTICAL_PER_DAY = 8; // target px-per-day pitch *at focus* (along the arc tangent)
 
 const RX = 420;
 const RY = 65;
@@ -55,22 +55,21 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 const SCALE_MIN = 0.42;
 const OPACITY_MIN = 0.32;
 
-// "Bend" — the spiral's axis curves backward at the top and bottom of
-// the visible region (Z axis, into the screen), so distant turns
-// physically recede in 3D and the focus area opens up. The 5 visible
-// turns model an arc of a 13-turn full year (~360°/13 per turn), so
-// the visible span subtends π·5/13 rad around the year-circle.
+// The year is one closed circle of TURNS_PER_YEAR sidereal lunar cycles.
+// Each card's ring-center sits at a real angular position θ on this
+// year-circle and gets real 3D (y, z) coordinates from it. Extending the
+// same parameterization past the visible 5 rings genuinely closes back
+// to itself after 13 — not a normalized 0→1 arc, but the real geometry.
 //
-// Each card is given a real Z coordinate via translate3d and the
-// enclosing .helix-canvas has CSS `perspective`, so the projection
-// from 3D → screen is what shrinks distant rings and pulls them
-// toward the perspective origin (the central column). This is the
-// "bicycle tire viewed straight on" feel: we see into the tread at
-// eye level, less so as the tread curves away above and below.
-const ARC_SPAN_RAD = Math.PI * 5 / 13; // ≈ 1.21 rad — visible arc on the year-circle
-const ARC_NORM = 1 - Math.cos(ARC_SPAN_RAD); // denominator for normalized depth ∈ [0,1]
+// At θ=0 the tangent is vertical, so dy/dθ = R_arc; we pick R_arc so the
+// pitch at focus matches VERTICAL_PER_DAY, keeping the year track on the
+// left lined up at the focus and only diverging as the arc curves.
+const TURNS_PER_YEAR = 13;
+const RADIANS_PER_DAY =
+  (2 * Math.PI) / (TURNS_PER_YEAR * SIDEREAL_CYCLE_DAYS);
+const ARC_RADIUS_PX = VERTICAL_PER_DAY / RADIANS_PER_DAY; // ≈ 452 px
+
 const PERSPECTIVE_PX = 1400; // CSS perspective focal distance
-const BEND_DEPTH_PX = 520; // Z displacement at the visible extremes (negative = backward)
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
 const CANVAS_WIDTH = 1060;
@@ -165,25 +164,27 @@ export function MoonthView() {
       const angleDeg = 180 - signedDelta;
       const angleRad = (angleDeg * Math.PI) / 180;
 
-      // Days from animated focus drive the vertical position.
+      // Days from animated focus, converted to an angular position on
+      // the year-circle. Past = θ < 0 (rings curve up-and-back); future
+      // = θ > 0 (down-and-back). Extending the same formula for
+      // |daysFromFocus| past 6.5 cycles would carry the ring all the
+      // way around to the other side of the year-circle.
       const daysFromFocus = (cardMs - animatedMs) / 86_400_000;
-      const verticalOffset = daysFromFocus * VERTICAL_PER_DAY;
+      const theta = daysFromFocus * RADIANS_PER_DAY;
+      const ringCenterY = ARC_RADIUS_PX * Math.sin(theta);
+      const ringCenterZ = ARC_RADIUS_PX * (Math.cos(theta) - 1);
 
       // X / Y in the 2D plane of the card slot. These describe the
       // CARD CENTER on the rendered surface; the actual perspective
       // foreshortening (cards far from focus appearing smaller and
       // more central) is applied in 3D via the Z below.
       const x = CENTER_X + RX * Math.sin(angleRad);
-      const y = CENTER_Y + verticalOffset - RY * Math.cos(angleRad);
+      const y = CENTER_Y + ringCenterY - RY * Math.cos(angleRad);
+      const z = ringCenterZ;
 
-      // Z (depth) — the bend. Each card's ring sits on a circular arc
-      // spanning ARC_SPAN_RAD radians of the year-circle. Cards at the
-      // focus are at z=0; cards at the visible extremes are pushed
-      // back by BEND_DEPTH_PX. CSS perspective on the parent does the
-      // rest of the projection automatically.
-      const verticalT = Math.min(1, Math.abs(daysFromFocus) / VISIBLE_HALF_DAYS);
-      const arcDepth = (1 - Math.cos(verticalT * ARC_SPAN_RAD)) / ARC_NORM; // 0 → 1
-      const z = -BEND_DEPTH_PX * arcDepth;
+      // Normalized arc-depth for opacity fading — 0 at focus, ~1 at
+      // the visible extremes. Independent of the 3D depth above.
+      const arcDepth = Math.min(1, Math.abs(daysFromFocus) / VISIBLE_HALF_DAYS);
 
       // Angular scale — front-vs-back of the local turn. This is the
       // within-ring foreshortening (the back of each ring's ellipse
@@ -242,11 +243,9 @@ export function MoonthView() {
             position: "relative",
             perspective: `${PERSPECTIVE_PX}px`,
             perspectiveOrigin: "50% 50%",
-            transformStyle: "preserve-3d",
           }}
         >
-          <div className="helix-cards" style={{ transformStyle: "preserve-3d" }}>
-            {placed.map(({ day, x, y, z, scale, opacity }) => {
+          {placed.map(({ day, x, y, z, scale, opacity }) => {
               const cardMs = epochMs(day.at);
               const isFocus = cardMs === targetMs;
               const isToday =
@@ -277,7 +276,6 @@ export function MoonthView() {
                 </div>
               );
             })}
-          </div>
         </div>
       </div>
 
