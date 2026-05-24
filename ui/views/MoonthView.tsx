@@ -80,8 +80,12 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 //   Z = (R_major + R_minor · cos(ψ)) · sin(φ)
 //
 // CSS `perspective` on the parent does the depth foreshortening.
-const R_MAJOR = 320;
-const R_MINOR = 170;
+// Ratio R_MAJOR : R_MINOR controls how visible the donut hole is.
+// 1.9 (the previous tuning) made the hole nearly close. ~2.9 opens
+// it up so the torus reads as a clear ring with a hole, not a
+// filled ellipse. Hole diameter = 2 · (R_MAJOR − R_MINOR).
+const R_MAJOR = 380;
+const R_MINOR = 130;
 
 const PERSPECTIVE_PX = 1600;
 
