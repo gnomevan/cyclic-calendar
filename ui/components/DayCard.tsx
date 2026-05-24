@@ -215,9 +215,9 @@ function formatTime(at: Instant): string {
 
 const PHASE_KIND_LABEL: Record<NonNullable<DayCardProps["phaseEvent"]>["kind"], string> = {
   new: "New",
-  first_quarter: "First Quarter",
+  first_quarter: "1st Q",
   full: "Full",
-  last_quarter: "Last Quarter",
+  last_quarter: "Last Q",
 };
 
 /** Local-time clock string like "10:02pm" (lowercase, no space). */
