@@ -50,7 +50,7 @@ const YEAR_DAYS = 365.25;
 // We can zoom in on a smaller window once the geometry is right.
 const VISIBLE_HALF_DAYS = Math.floor(YEAR_DAYS / 2); // ≈ 182 days each side = full year
 
-const CARD_WIDTH = 55;
+const CARD_WIDTH = 50;
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
 // Torus geometry. The torus is on its side — its axis runs left/right
@@ -80,18 +80,19 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 //   Z = (R_major + R_minor · cos(ψ)) · sin(φ)
 //
 // CSS `perspective` on the parent does the depth foreshortening.
-// Ratio R_MAJOR : R_MINOR controls how visible the donut hole is.
-// 1.9 (the previous tuning) made the hole nearly close. ~2.9 opens
-// it up so the torus reads as a clear ring with a hole, not a
-// filled ellipse. Hole diameter = 2 · (R_MAJOR − R_MINOR).
-const R_MAJOR = 380;
-const R_MINOR = 130;
+// R_MAJOR / R_MINOR sets the donut shape. Hole diameter = 2·(R_MAJOR−R_MINOR);
+// outer diameter = 2·(R_MAJOR+R_MINOR). Cross-section circumference =
+// 2π·R_MINOR, which has to fit ~28 cards per moonth — so wider tube
+// (bigger R_MINOR) = less card overlap, but R_MAJOR has to grow even
+// faster to keep the hole opening up.
+const R_MAJOR = 500;
+const R_MINOR = 200;
 
 const PERSPECTIVE_PX = 1600;
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
-const CANVAS_WIDTH = 1100;
-const CANVAS_HEIGHT = 1100;
+const CANVAS_WIDTH = 1440;
+const CANVAS_HEIGHT = 1440;
 
 const CENTER_X = CANVAS_WIDTH / 2;
 const CENTER_Y = CANVAS_HEIGHT / 2;
