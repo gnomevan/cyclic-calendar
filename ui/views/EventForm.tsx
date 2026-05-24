@@ -100,9 +100,37 @@ export function EventForm() {
     : null;
 
   const isEditing = editingEventId !== null;
+  const isOpen = editingEventId !== null || creatingFromDay !== null;
 
+  const dialogRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  // Close on Escape while the modal is open.
+  useEffect(() => {
+    if (!isOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        clearEditingState();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen]);
+
+  // Focus the name input when the modal opens.
+  useEffect(() => {
+    if (isOpen) {
+      const id = window.setTimeout(() => nameRef.current?.focus(), 30);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [isOpen]);
+
+  function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget) clearEditingState();
+  }
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -231,10 +259,30 @@ export function EventForm() {
     : "create";
   const headingTitle = isEditing ? "Edit event" : "New event";
 
+  // The form is now a popup modal. Render nothing when the user
+  // hasn't picked an event to edit or a day to create on.
+  if (!isOpen) return null;
+
   return (
+    <div
+      ref={dialogRef}
+      className="event-form-backdrop"
+      onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="event-form-title"
+    >
     <section ref={formRef} className="wheel-card event-form">
+      <button
+        type="button"
+        className="event-form-close"
+        aria-label="Close"
+        onClick={() => clearEditingState()}
+      >
+        ×
+      </button>
       <div className="wheel-kind">{headingKind}</div>
-      <h2>{headingTitle}</h2>
+      <h2 id="event-form-title">{headingTitle}</h2>
       <form onSubmit={handleSubmit}>
         <label>
           Name
@@ -298,14 +346,13 @@ export function EventForm() {
           <button type="submit">
             {isEditing ? "Update event" : "Add event"}
           </button>
-          {(isEditing || creatingFromDay) && (
-            <button type="button" className="event-form-cancel" onClick={handleCancel}>
-              Cancel
-            </button>
-          )}
+          <button type="button" className="event-form-cancel" onClick={handleCancel}>
+            Cancel
+          </button>
         </div>
       </form>
     </section>
+    </div>
   );
 }
 

@@ -226,7 +226,64 @@ main {
   border-radius: 2px;
 }
 
-/* ----- Event form ----- */
+/* ----- Event form (modal popup) ----- */
+.event-form-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 6, 4, 0.62);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1.5rem;
+  animation: event-form-backdrop-in 0.12s ease-out;
+}
+
+@keyframes event-form-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.event-form-backdrop .event-form {
+  position: relative;
+  width: min(540px, 100%);
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  background: #181210;
+  border: 1px solid rgba(160, 110, 60, 0.32);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6),
+              0 0 0 1px rgba(212, 163, 115, 0.08);
+  border-radius: 8px;
+  padding: 1.25rem 1.4rem 1.4rem;
+  animation: event-form-pop 0.16s ease-out;
+}
+
+@keyframes event-form-pop {
+  from { transform: translateY(8px) scale(0.985); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.event-form-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  color: rgba(200, 152, 104, 0.6);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.25rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.1s ease, background 0.1s ease;
+}
+
+.event-form-close:hover {
+  color: #d4a373;
+  background: rgba(212, 163, 115, 0.08);
+}
+
 .event-form form {
   display: grid;
   gap: 0.75rem;
