@@ -44,7 +44,14 @@ import { wheelRegistry } from "../wheels.js";
  */
 
 const SIDEREAL_CYCLE_DAYS = 27.32;
-const YEAR_DAYS = 365.25;
+
+// "One ring" of the torus now spans 100 years instead of 1. This is a
+// readability cheat: the visible 5-cycle window covers only ~0.4 % of
+// the major circle, so its arc is essentially flat on screen, while
+// the math still closes back to itself — just at 100 years instead
+// of 1. R_MAJOR scales proportionally below so the per-day pitch
+// stays matched to the live wheel's 8 px/day.
+const YEAR_DAYS = 365.25 * 100;
 
 // 5 sidereal cycles visible at a time — same window as the live
 // version. The remaining ~8 cycles' worth of cards live off-screen on
@@ -84,25 +91,31 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 //   Z = (R_MAJOR + R_MINOR · cos(ψ)) · sin(φ)
 //
 // CSS `perspective` on the parent handles depth foreshortening.
-// Torus dimensions tuned so the visible 5-cycle arc roughly matches
-// the live version's vertical extent (~1090 px) and the cross-section
-// is wide enough for 28 × 105-px cards with the same gentle overlap
-// the live wheel had at its front:
+// Torus dimensions. With YEAR_DAYS now 36 525, the visible 5-cycle
+// window subtends only ~0.023 rad of the major circle, so sin(N·RATE)
+// ≈ N·RATE and the visible y range is ≈ R_MAJOR · 2 · N · 2π / YEAR_DAYS.
+// We pick R_MAJOR so the per-day pitch dy/dt = R_MAJOR · RATE = 8 px/day
+// (matching the live wheel):
 //
-//   visible y range = 2 · R_MAJOR · sin(VISIBLE_HALF_DAYS · RATE)
-//                   = 2 · R_MAJOR · sin(1.17 rad) ≈ 1.84 · R_MAJOR
-//   For ~1090 px: R_MAJOR ≈ 591.
+//   R_MAJOR = 8 · YEAR_DAYS / (2π) ≈ 46 500
 //
-//   cross-section circumference = 2π · R_MINOR. For 28 × 105 = 2940 px
-//   of card with ~10 % overlap: R_MINOR ≈ 350.
-const R_MAJOR = 591;
+// Cross-section radius wide enough for 28 × 105-px cards with the same
+// gentle overlap the live wheel had at its front:
+//
+//   R_MINOR ≈ 350 (cross-section circumference ≈ 2200 px; 28 × 105 =
+//                  2940 px ⇒ ~30 % overlap, close to the live front).
+const R_MAJOR = Math.round((8 * YEAR_DAYS) / (2 * Math.PI));
 const R_MINOR = 350;
 
-// Large perspective focal distance ⇒ mild foreshortening. Cards at
-// the visible extremes shrink by only ~15 %, so the helix reads as
-// a stack of rings with a hint of 3D depth rather than a dramatic
-// vanishing tunnel.
-const PERSPECTIVE_PX = 5000;
+// Perspective tuned so the front-to-back ratio inside a single ring
+// matches the live wheel's 1.0 → 0.42 angularScale curve:
+//
+//   front of focus ring at z = 0      ⇒ scale = 1.0
+//   back of focus ring  at z = -2·R_MINOR ⇒ scale = P / (P + 2·R_MINOR)
+//
+//   To get ratio 0.42: P ≈ 0.84·R_MINOR / 0.58 ≈ 1.45·R_MINOR
+//   For R_MINOR = 350 ⇒ P ≈ 500.
+const PERSPECTIVE_PX = 500;
 
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
 const CANVAS_WIDTH = 1100;
@@ -209,7 +222,13 @@ export function MoonthView() {
       const radial = R_MAJOR + R_MINOR * Math.cos(psi);
       const xMath = R_MINOR * Math.sin(psi);
       const yMath = radial * Math.cos(phi);
-      const zMath = radial * Math.sin(phi);
+      // Shift z so the front of focus ring (sin(phi)=1, cos(psi)=1)
+      // lands at z=0. With R_MAJOR ≈ 46 500 (100-year ring) this brings
+      // every visible card into the range [−2·R_MINOR, 0], which CSS
+      // perspective handles cleanly. Without this shift, cards would be
+      // tens of thousands of pixels in front of the perspective focal
+      // plane and the projection would invert.
+      const zMath = radial * Math.sin(phi) - (R_MAJOR + R_MINOR);
 
       // Map math → CSS. Math Y is up; CSS y is down.
       const x = CENTER_X + xMath;
