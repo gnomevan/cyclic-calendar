@@ -722,17 +722,17 @@ main {
   color: var(--fg-dim);
 }
 
-/* Moon stage — the moon glyph fills most of the body, and the zodiac
-   sign sits centered over it like a tattoo (just a plain symbol, no
-   halo or blend tricks). Events (when present) flow above the moon
-   in normal document order, and the moon shrinks to fit. */
+/* Moon stage — fixed-height block pinned to the top of the card.
+   The zodiac sign sits centered over the moon like a tattoo. Adding
+   or removing events does NOT move the moon; events flow below it
+   and "hang off" the card if they exceed the available space. */
 .day-card-moon-stage {
   position: relative;
-  flex: 1;
+  flex: 0 0 auto;
+  height: 60%;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 0;
   pointer-events: none;
 }
 
