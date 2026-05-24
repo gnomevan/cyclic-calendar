@@ -689,19 +689,19 @@ main {
               0 0 16px rgba(159, 199, 232, 0.45);
 }
 
-/* Phase tag — sits between the moon and the date row. Shows the
-   plain phase name on most days ("Waxing Gibbous") and the exact
-   clock time on the four primary phase days ("Full: 10:02pm"). */
+/* Phase tag — first line of the meta stack. Plain phase name on
+   most days ("Waxing Gibbous") and the exact clock time on the
+   four primary phase days ("Full: 10:02pm"). */
 .day-card-phase {
   font-size: 0.62rem;
-  text-align: center;
-  padding: 2px 4px 1px;
-  color: rgba(200, 152, 104, 0.7);
+  color: rgba(200, 152, 104, 0.75);
   font-family: ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0.02em;
-  line-height: 1.1;
-  flex: 0 0 auto;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
 .day-card-phase-anchor {
@@ -709,19 +709,14 @@ main {
   font-weight: 600;
 }
 
-/* Date row — weekday (3-letter) on the left, calendar date next to
-   it. Sits below the phase tag and above the events list. */
-.day-card-head {
+/* Date stamp — weekday + month/day on the next line of the meta
+   stack. */
+.day-card-datestamp {
   display: flex;
   align-items: baseline;
-  justify-content: center;
-  gap: 6px;
-  padding: 4px 7px;
-  border-top: 1px solid var(--line);
+  gap: 5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   letter-spacing: 0.01em;
-  line-height: 1;
-  flex: 0 0 auto;
 }
 
 .day-card-weekday {
@@ -741,18 +736,34 @@ main {
   color: rgba(200, 152, 104, 0.55);
 }
 
-/* Moon stage — fixed-height block pinned to the top of the card.
-   The zodiac sign sits centered over the moon like a tattoo. Adding
-   or removing events does NOT move the moon; events flow below it
-   and "hang off" the card if they exceed the available space. */
+/* Top section — moon on the left, meta stack (phase / weekday /
+   date) on the right. Fixed height regardless of how many events
+   the day has. */
+.day-card-top {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+}
+
 .day-card-moon-stage {
   position: relative;
   flex: 0 0 auto;
-  height: 60%;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+
+.day-card-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  line-height: 1.05;
 }
 
 .day-card-moon-stage svg {

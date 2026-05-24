@@ -128,13 +128,15 @@ export function DayCard({
     setEditingEventId(eventId);
   }
 
-  // Stacking order, top → bottom:
-  //   1. moon + zodiac tattoo
-  //   2. phase tag — "Waxing Gibbous", or for primary phase days
-  //                 "Full: 10:02pm" with the exact crossing time
-  //   3. weekday + date
-  //   4. events (when present)
-  const moonGlyphSize = Math.round(width * 0.72);
+  // Layout:
+  //   ┌─────────────────────┐
+  //   │ 🌙  Waxing Gibbous  │   ← moon (half size) + meta stack
+  //   │     Mon May 25      │
+  //   ├─────────────────────┤
+  //   │ • event 1           │
+  //   │ • event 2           │
+  //   └─────────────────────┘
+  const moonGlyphSize = Math.round(width * 0.36);
 
   const phaseLabel = phaseEvent
     ? `${PHASE_KIND_LABEL[phaseEvent.kind]}: ${formatClockTime(phaseEvent.at)}`
@@ -147,30 +149,34 @@ export function DayCard({
       onClick={handleBodyClick}
       title={isFocus ? "Click to add an event here" : "Click to focus this day"}
     >
-      <div className="day-card-moon-stage" aria-hidden="true">
-        <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
-        <span className="day-card-moon-tattoo">
-          <ZodiacGlyph
-            angle={moonSiderealAngle}
-            size={Math.round(moonGlyphSize * 0.42)}
-            colorize={false}
-          />
-        </span>
-      </div>
-      <div
-        className={
-          phaseEvent
-            ? "day-card-phase day-card-phase-anchor"
-            : "day-card-phase"
-        }
-      >
-        {phaseLabel}
-      </div>
-      <div className="day-card-head">
-        <span className="day-card-weekday">{weekday}</span>
-        <span className="day-card-date">
-          {greMonth} {greDay}
-        </span>
+      <div className="day-card-top">
+        <div className="day-card-moon-stage" aria-hidden="true">
+          <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
+          <span className="day-card-moon-tattoo">
+            <ZodiacGlyph
+              angle={moonSiderealAngle}
+              size={Math.round(moonGlyphSize * 0.5)}
+              colorize={false}
+            />
+          </span>
+        </div>
+        <div className="day-card-meta">
+          <div
+            className={
+              phaseEvent
+                ? "day-card-phase day-card-phase-anchor"
+                : "day-card-phase"
+            }
+          >
+            {phaseLabel}
+          </div>
+          <div className="day-card-datestamp">
+            <span className="day-card-weekday">{weekday}</span>
+            <span className="day-card-date">
+              {greMonth} {greDay}
+            </span>
+          </div>
+        </div>
       </div>
       {events.length > 0 && (
         <ul className="day-card-events">
