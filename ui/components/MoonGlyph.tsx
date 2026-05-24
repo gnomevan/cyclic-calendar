@@ -124,14 +124,22 @@ function buildShadowPath({ cx, cy, r, rx, waxing, moreThanHalfLit }: ShadowPathA
   const bottom = `${cx} ${cy + r}`;
 
   // The half-disc arc.
-  // - When waxing (dark side LEFT), the half-disc is the LEFT half:
-  //   arc sweep going counterclockwise from top to bottom along the left edge.
-  // - When waning (dark side RIGHT), the half-disc is the RIGHT half:
-  //   arc going clockwise from top to bottom along the right edge.
-  // In SVG arc params: A rx ry x-axis-rotation large-arc-flag sweep-flag x y
+  //
+  // Important: SVG arc sweep-flag semantics in y-down coordinates.
+  // For a chord from top→bottom, sweep=1 curves to the LEFT of the
+  // travel direction (which is the LEFT side of the disc in screen
+  // space), sweep=0 curves to the RIGHT.
+  //
+  // The previous version had the flags inverted, producing the
+  // *complement* of the intended shadow — new moon rendered as fully
+  // lit and full moon as fully dark.
+  //
+  // - Waxing (dark side LEFT)  → half-disc is the LEFT half  → sweep=1.
+  // - Waning (dark side RIGHT) → half-disc is the RIGHT half → sweep=0.
+  // SVG arc params: A rx ry x-axis-rotation large-arc-flag sweep-flag x y
   const halfDisc = waxing
-    ? `A ${r} ${r} 0 0 0 ${bottom}` // counterclockwise (left half)
-    : `A ${r} ${r} 0 0 1 ${bottom}`; // clockwise (right half)
+    ? `A ${r} ${r} 0 0 1 ${bottom}` // left half
+    : `A ${r} ${r} 0 0 0 ${bottom}`; // right half
 
   // The terminator ellipse, drawn back from bottom to top, with the
   // appropriate sweep based on whether it bulges into the lit or dark side.
