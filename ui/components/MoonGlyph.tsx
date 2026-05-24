@@ -37,9 +37,9 @@ interface MoonGlyphProps {
 export function MoonGlyph({
   angle,
   size = 24,
-  lit = "#d9b485", // gentle amber instead of pure white
-  dark = "#1c1410", // warm near-black instead of cool charcoal
-  ring = "#3a2c1f", // amber-toned ring
+  lit = "#c79066", // deeper amber with a red undertone
+  dark = "#1a110c", // warm near-black
+  ring = "#3a2618", // dark amber-brown ring
 }: MoonGlyphProps) {
   const r = size / 2 - 1;
   const cx = size / 2;
