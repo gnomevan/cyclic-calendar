@@ -117,56 +117,58 @@ export function DayCard({
     setEditingEventId(eventId);
   }
 
-  // Moon glyph fills most of the card; the zodiac glyph sits over it
-  // centered like a tattoo. Events (when present) flow above the moon
-  // — the moon naturally shrinks to make room rather than getting
-  // covered by an overlay.
+  // Stacking order, top → bottom:
+  //   1. moon + zodiac tattoo (fills available space)
+  //   2. weekday + date
+  //   3. events (when present)
   const moonGlyphSize = Math.round(width * 0.72);
 
   return (
-    <div className={classes.join(" ")} style={{ width, height }}>
+    <div
+      className={classes.join(" ")}
+      style={{ width, height }}
+      onClick={handleBodyClick}
+      title={isFocus ? "Click to add an event here" : "Click to focus this day"}
+    >
+      <div className="day-card-moon-stage" aria-hidden="true">
+        <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
+        <span className="day-card-moon-tattoo">
+          <ZodiacGlyph
+            angle={moonSiderealAngle}
+            size={Math.round(moonGlyphSize * 0.42)}
+            colorize={false}
+          />
+        </span>
+      </div>
       <div className="day-card-head">
         <span className="day-card-weekday">{weekday}</span>
         <span className="day-card-date">
           {greMonth} {greDay}
         </span>
       </div>
-      <div
-        className="day-card-body"
-        onClick={handleBodyClick}
-        title={isFocus ? "Click to add an event here" : "Click to focus this day"}
-      >
-        {events.length > 0 && (
-          <ul className="day-card-events">
-            {visible.map(({ event, at: occurrenceAt }) => (
-              <li key={event.id}>
-                <button
-                  type="button"
-                  className="day-card-event-btn"
-                  title={event.description ?? event.name}
-                  onClick={() => handleEventClick(event.id)}
-                >
-                  <time>{formatTime(occurrenceAt)}</time>
-                  <span className="day-card-event-name">{event.name}</span>
-                </button>
-              </li>
-            ))}
-            {overflow > 0 && (
-              <li className="day-card-overflow">+{overflow} more</li>
-            )}
-          </ul>
-        )}
-        <div className="day-card-moon-stage" aria-hidden="true">
-          <MoonGlyph angle={moonAngle} size={moonGlyphSize} />
-          <span className="day-card-moon-tattoo">
-            <ZodiacGlyph
-              angle={moonSiderealAngle}
-              size={Math.round(moonGlyphSize * 0.42)}
-              colorize={false}
-            />
-          </span>
-        </div>
-      </div>
+      {events.length > 0 && (
+        <ul className="day-card-events">
+          {visible.map(({ event, at: occurrenceAt }) => (
+            <li key={event.id}>
+              <button
+                type="button"
+                className="day-card-event-btn"
+                title={event.description ?? event.name}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEventClick(event.id);
+                }}
+              >
+                <time>{formatTime(occurrenceAt)}</time>
+                <span className="day-card-event-name">{event.name}</span>
+              </button>
+            </li>
+          ))}
+          {overflow > 0 && (
+            <li className="day-card-overflow">+{overflow} more</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }
