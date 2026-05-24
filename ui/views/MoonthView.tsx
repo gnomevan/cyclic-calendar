@@ -53,31 +53,32 @@ const VISIBLE_HALF_DAYS = Math.floor(YEAR_DAYS / 2); // ≈ 182 days each side =
 const CARD_WIDTH = 50;
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.618);
 
-// Torus geometry. The torus is on its side — its axis runs left/right
-// (X axis), perpendicular to the camera. The donut sits with the
-// hole facing left and right; the camera sees its outer profile as a
-// circular ring.
+// Torus geometry. The donut faces the camera — its symmetry axis runs
+// into the screen (Z), so the major circle sits in the XY plane and
+// we see the full ring with its hole, like a tire from the side.
 //
 //   R_MAJOR — distance from torus center to the cross-section center
-//             (= "year-circle radius"). 13 moonth-cross-sections sit
-//             around this major circle.
-//   R_MINOR — radius of each cross-section circle (the donut tube).
-//             Cards going around each cross-section represent the
-//             ~28 days of one moonth.
+//             (year-circle radius). Major circle traces this in XY.
+//   R_MINOR — radius of each cross-section (donut tube). Cards bulge
+//             toward (+z) and away (−z) from the screen by R_MINOR
+//             as they helix around.
 //
-// The card helix:
-//   φ (major-angle)  = π/2 + daysFromFocus · (2π / YEAR_DAYS)
-//                      — focus sits at φ=π/2, the front of the torus
-//                        (closest to camera). Past goes up-and-back,
-//                        future goes down-and-back.
-//   ψ (minor-angle)  = (moonSiderealAngle − focusSiderealAngle) [rad]
-//                      — focused day at ψ=0 (cross-section's outward
-//                        side = front of focus moonth's cross-section).
+// The card helix is a (1, ~13) torus knot — one major revolution per
+// year, ~13 minor revolutions (one per sidereal lunar cycle):
+//
+//   φ (major-angle) = π + daysFromFocus · (2π / YEAR_DAYS)
+//                     — focus at φ=π puts the focused day on the
+//                       LEFT of the major circle. Past curves up-
+//                       and-around (counterclockwise), future curves
+//                       down-and-around (clockwise).
+//   ψ (minor-angle) = π/2 + (moonSiderealAngle − focusSiderealAngle)
+//                     — focused day at ψ=π/2, the FRONT of its
+//                       cross-section (closest to camera).
 //
 // Card 3D position on the torus surface:
-//   X =  R_minor · sin(ψ)
-//   Y = (R_major + R_minor · cos(ψ)) · cos(φ)   [+Y is up in math; flip for CSS]
-//   Z = (R_major + R_minor · cos(ψ)) · sin(φ)
+//   X = (R_MAJOR + R_MINOR · cos(ψ)) · cos(φ)
+//   Y = (R_MAJOR + R_MINOR · cos(ψ)) · sin(φ)     [math up; flip for CSS]
+//   Z =  R_MINOR · sin(ψ)
 //
 // CSS `perspective` on the parent does the depth foreshortening.
 // R_MAJOR / R_MINOR sets the donut shape. Hole diameter = 2·(R_MAJOR−R_MINOR);
@@ -178,25 +179,26 @@ export function MoonthView() {
       const cardMs = epochMs(d.at);
       const daysFromFocus = (cardMs - animatedMs) / 86_400_000;
 
-      // φ — major-angle around the year-circle. Focus at π/2 puts the
-      // focused moonth at the FRONT of the torus (closest to camera).
-      // Past = smaller φ (curves up-and-back); future = larger φ
-      // (down-and-back).
-      const phi = Math.PI / 2 - daysFromFocus * (2 * Math.PI / YEAR_DAYS);
+      // φ — major-angle around the year-circle. Focus at π puts the
+      // focused moonth on the LEFT side of the donut. Past = larger φ
+      // (counterclockwise from left = up-and-around-the-top); future =
+      // smaller φ (clockwise from left = down-and-around-the-bottom).
+      const phi = Math.PI + daysFromFocus * (2 * Math.PI / YEAR_DAYS);
 
       // ψ — minor-angle around the moonth-cross-section. Driven by
-      // moon's sidereal longitude relative to focus, so the focused
-      // day always lands at ψ=0 (outer face of cross-section, pointing
-      // away from torus axis — at focus that's straight toward camera).
+      // moon's sidereal longitude relative to focus, with a π/2 offset
+      // so the focused day lands at ψ=π/2 — the FRONT of the cross-
+      // section (closest to camera).
       const deltaLong = normalizeAngle(d.moonSiderealAngle - focusSiderealAngle);
       const signedDelta = deltaLong > 180 ? deltaLong - 360 : deltaLong;
-      const psi = (signedDelta * Math.PI) / 180;
+      const psi = Math.PI / 2 + (signedDelta * Math.PI) / 180;
 
-      // Torus surface point: helix the (φ, ψ) coordinates.
+      // Torus surface point. Major circle lies in the XY plane;
+      // cross-section bulges along Z (the donut's tube thickness).
       const radial = R_MAJOR + R_MINOR * Math.cos(psi);
-      const xMath = R_MINOR * Math.sin(psi);
-      const yMath = radial * Math.cos(phi);
-      const zMath = radial * Math.sin(phi);
+      const xMath = radial * Math.cos(phi);
+      const yMath = radial * Math.sin(phi);
+      const zMath = R_MINOR * Math.sin(psi);
 
       // Map math → CSS. Math Y is up; CSS y is down.
       const x = CENTER_X + xMath;
