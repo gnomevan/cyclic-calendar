@@ -230,8 +230,7 @@ main {
 .event-form-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 6, 4, 0.62);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
