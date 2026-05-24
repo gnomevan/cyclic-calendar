@@ -534,17 +534,13 @@ main {
 
 .moonth-layout {
   display: flex;
-  align-items: flex-start;
+  align-items: center; /* center the year track vertically against the helix */
   gap: 1.25rem;
 }
 
 .solar-year-track {
   flex: 0 0 auto;
-  border-right: 1px solid var(--line);
   padding-right: 0.5rem;
-  position: sticky;
-  top: 1rem;
-  align-self: flex-start;
 }
 
 .moonth-stack {

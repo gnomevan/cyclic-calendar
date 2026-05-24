@@ -96,13 +96,14 @@ export function SolarYearTrack({
   return (
     <div className="solar-year-track" style={{ width, height }}>
       <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
-        {/* The spine */}
+        {/* The spine — translucent amber line that matches the helix
+            cards and doesn't extend past either end of the wheel. */}
         <line
           x1={width / 2}
           y1={0}
           x2={width / 2}
           y2={height}
-          stroke="#1f232b"
+          stroke="rgba(160, 110, 60, 0.35)"
           strokeWidth={1}
         />
 
@@ -112,13 +113,18 @@ export function SolarYearTrack({
           if (y < 0 || y > height) return null;
           return (
             <g key={`month-${m.ms}`}>
-              <line x1={width / 2 - 5} y1={y} x2={width / 2 + 5} y2={y} stroke="#2a2f38" strokeWidth={0.8} />
+              <line
+                x1={width / 2 - 5} y1={y}
+                x2={width / 2 + 5} y2={y}
+                stroke="rgba(160, 110, 60, 0.2)"
+                strokeWidth={0.8}
+              />
               <text
                 x={width / 2 - 10}
                 y={y + 3}
                 textAnchor="end"
                 fontSize="10"
-                fill="#5a5f6a"
+                fill="rgba(200, 152, 104, 0.55)"
                 fontFamily="ui-monospace, monospace"
               >
                 {m.label}
@@ -133,14 +139,14 @@ export function SolarYearTrack({
           if (y < 0 || y > height) return null;
           return (
             <g key={a.id}>
-              <line x1={width / 2 - 9} y1={y} x2={width / 2 + 9} y2={y} stroke="#cdd5e0" strokeWidth={1.8} />
-              <circle cx={width / 2} cy={y} r={3.5} fill="#cdd5e0" />
+              <line x1={width / 2 - 9} y1={y} x2={width / 2 + 9} y2={y} stroke="#c89868" strokeWidth={1.8} />
+              <circle cx={width / 2} cy={y} r={3.5} fill="#c89868" />
               <text
                 x={width / 2 + 14}
                 y={y + 4}
                 textAnchor="start"
                 fontSize="12"
-                fill="#cdd5e0"
+                fill="#c89868"
                 fontFamily="ui-sans-serif, system-ui, sans-serif"
               >
                 {a.label}
@@ -231,10 +237,18 @@ export function SolarYearTrack({
         })()}
 
         {/* Captions */}
-        <text x={width / 2} y={14} textAnchor="middle" fontSize="10" fill="#5a5f6a">
+        <text
+          x={width / 2} y={14}
+          textAnchor="middle" fontSize="10"
+          fill="rgba(200, 152, 104, 0.55)"
+        >
           past ↑
         </text>
-        <text x={width / 2} y={height - 4} textAnchor="middle" fontSize="10" fill="#5a5f6a">
+        <text
+          x={width / 2} y={height - 4}
+          textAnchor="middle" fontSize="10"
+          fill="rgba(200, 152, 104, 0.55)"
+        >
           future ↓
         </text>
       </svg>

@@ -119,6 +119,14 @@ const R_MINOR_Y = 65;
 const R_MINOR_Z = 345;
 const PERSPECTIVE_PX = 1000;
 
+// Visible vertical extent of the helix — distance from the topmost
+// ring centre (focus − VISIBLE_HALF_DAYS) to the bottommost. The
+// solar year track is sized to match this so it doesn't stick out
+// above or below the wheel, and its per-day scale matches the
+// helix's per-day pitch one-to-one.
+const VISIBLE_Y_RANGE =
+  2 * R_MAJOR * Math.sin((VISIBLE_HALF_DAYS * 2 * Math.PI) / YEAR_DAYS);
+
 const VISIBLE_DAYS_TOTAL = VISIBLE_HALF_DAYS * 2 + 1;
 const CANVAS_WIDTH = 1100;
 const CANVAS_HEIGHT = 1900;
@@ -305,7 +313,7 @@ export function MoonthView() {
 
       <div className="moonth-layout">
         <SolarYearTrack
-          height={CANVAS_HEIGHT}
+          height={VISIBLE_Y_RANGE}
           halfRangeDays={VISIBLE_HALF_DAYS}
           referenceInstant={focusInstant}
           nowInstant={nowInstant}
