@@ -1010,6 +1010,8 @@ main {
   transition: background 0.1s ease;
 }
 
+/* Single-day event — small round dot left of the title, in the
+   event's color. */
 .day-card-event-btn::before {
   content: "•";
   position: absolute;
@@ -1020,18 +1022,20 @@ main {
   line-height: 1.05;
 }
 
-/* Multi-day START — colored line trails from the title to the right
-   edge of the row, signaling that the event continues on the next
-   card. */
-.day-card-event-btn-spanstart::after {
+/* Multi-day START — the dot is replaced with a horizontal dash that
+   matches the continuation bar's thickness exactly. No trailing
+   underline; the next card's continuation row is the visual
+   continuation. */
+.day-card-event-btn-spanstart::before {
   content: "";
   position: absolute;
-  right: 0;
-  bottom: 2px;
-  height: 2px;
-  /* Stretches to fill whatever horizontal space is left of the row. */
-  width: 14px;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 4px;
   background: var(--event-color, var(--accent));
+  color: transparent;
   border-radius: 1px;
 }
 
@@ -1040,16 +1044,17 @@ main {
 }
 
 /* Continuation day — a stand-alone bar showing the event's color
-   spanning the full row width, no title. Hover/click still target
-   the underlying event. */
+   spanning the full row width, no title. Same 4-px thickness as the
+   start-day dash so the two read as one continuous line across
+   adjacent cards. */
 .day-card-event-continuation {
   width: 100%;
-  height: 6px;
+  height: 4px;
   border-radius: 1px;
   background: var(--event-color, var(--accent));
   cursor: pointer;
-  margin: 1px 0;
-  opacity: 0.85;
+  margin: 2px 0;
+  opacity: 0.9;
   transition: opacity 0.1s ease;
 }
 

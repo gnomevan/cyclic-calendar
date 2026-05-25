@@ -481,9 +481,15 @@ function groupEventsByDayMs(
   }
 
   for (const occurrences of result.values()) {
-    // Sort so the START day of an event appears with its title; on
-    // continuation days the colored line is fine in chronological order.
-    occurrences.sort((a, b) => epochMs(a.at) - epochMs(b.at));
+    // Sort so multi-day events bubble to the top of each card's
+    // events list (start and continuation rows go above any
+    // single-day events). Within each group, chronological by time.
+    occurrences.sort((a, b) => {
+      const aMulti = a.position !== "single";
+      const bMulti = b.position !== "single";
+      if (aMulti !== bMulti) return aMulti ? -1 : 1;
+      return epochMs(a.at) - epochMs(b.at);
+    });
   }
   return result;
 }
